@@ -111,3 +111,26 @@ module "ansible_inventory" {
   controllers       = ibm_is_instance.controllers.*
   workers           = ibm_is_instance.workers.*
 }
+
+resource "local_file" "worker_csr" {
+  count  = 3
+  content = <<EOF
+{
+  "CN": "system:node:${var.basename}-worker-${count.index}",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Houston",
+      "O": "system:nodes",
+      "OU": "Kubernetes The Slightly Difficult Way",
+      "ST": "Texas"
+    }
+  ]
+}
+EOF
+  filename = "../030-certificate-authority/${var.basename}-worker-${count.index}-csr.json"
+}
