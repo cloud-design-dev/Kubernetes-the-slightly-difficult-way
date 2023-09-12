@@ -19,6 +19,7 @@ Deploy a Kubernetes cluster using terraform, Ansible and some CLI magic
 4. Deploy VPC and Compute Resources
 
   ```shell
+  source local.env
   (cd 010-vpc-infrastructure && ./main.sh apply)
   (cd 020-vpc-compute && ./main.sh apply)
   ```
