@@ -12,7 +12,7 @@ output "bastion_security_group_id" {
 
 output "cluster_security_group_id" {
   value = module.cluster_security_group.security_group_id[0]
-} 
+}
 
 output "resource_group_id" {
   value = module.resource_group.resource_group_id

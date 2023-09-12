@@ -35,5 +35,5 @@ locals {
       zone = "${var.region}-${zone + 1}"
     }
   }
-} 
- 
+}
+

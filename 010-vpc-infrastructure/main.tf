@@ -48,10 +48,10 @@ module "cluster_security_group" {
 
 
 resource "ibm_is_security_group_rule" "bastion_to_cluster_ssh" {
-  depends_on = [ module.bastion_security_group ]
-  group     = module.cluster_security_group.security_group_id[0]
-  direction = "inbound"
-  remote    = module.bastion_security_group.security_group_id[0]
+  depends_on = [module.bastion_security_group]
+  group      = module.cluster_security_group.security_group_id[0]
+  direction  = "inbound"
+  remote     = module.bastion_security_group.security_group_id[0]
   tcp {
     port_min = 22
     port_max = 22
@@ -59,8 +59,8 @@ resource "ibm_is_security_group_rule" "bastion_to_cluster_ssh" {
 }
 
 resource "ibm_is_security_group_rule" "cluster_to_cluster" {
-  depends_on = [ module.cluster_security_group ]
-  group     = module.cluster_security_group.security_group_id[0]
-  direction = "inbound"
-  remote    = module.cluster_security_group.security_group_id[0]
+  depends_on = [module.cluster_security_group]
+  group      = module.cluster_security_group.security_group_id[0]
+  direction  = "inbound"
+  remote     = module.cluster_security_group.security_group_id[0]
 }

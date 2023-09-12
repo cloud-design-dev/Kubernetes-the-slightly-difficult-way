@@ -98,7 +98,7 @@ variable "bastion_rules" {
         type = 8
       }
     },
-      {
+    {
       name       = "dns-outbound"
       direction  = "outbound"
       remote     = "0.0.0.0/0"
@@ -171,7 +171,7 @@ variable "cluster_rules" {
         type = 8
       }
     },
-      {
+    {
       name       = "dns-outbound"
       direction  = "outbound"
       remote     = "0.0.0.0/0"

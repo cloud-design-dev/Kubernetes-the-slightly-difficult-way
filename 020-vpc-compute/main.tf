@@ -10,7 +10,7 @@ locals {
       zone = "${var.region}-${zone + 1}"
     }
   }
-} 
+}
 
 resource "ibm_is_instance" "bastion" {
   name           = "${var.basename}-bastion"
@@ -48,7 +48,7 @@ resource "ibm_is_floating_ip" "bastion" {
 }
 
 resource "ibm_is_instance" "controllers" {
-  count = 3
+  count          = 3
   name           = "${var.basename}-controller-${count.index}"
   vpc            = data.terraform_remote_state.vpc.outputs.vpc_id
   image          = data.ibm_is_image.base.id
@@ -77,7 +77,7 @@ resource "ibm_is_instance" "controllers" {
 }
 
 resource "ibm_is_instance" "workers" {
-  count = 3
+  count          = 3
   name           = "${var.basename}-worker-${count.index}"
   vpc            = data.terraform_remote_state.vpc.outputs.vpc_id
   image          = data.ibm_is_image.base.id
