@@ -8,17 +8,18 @@ Deploy a Kubernetes cluster using terraform, Ansible and some CLI magic
    cd Kubernetes-the-slightly-difficult-way
   ```
 
-1. Copy `template.local.env` to `local.env`:
+2. Copy `template.local.env` to `local.env`:
 
   ```shell
   cp template.local.env local.env
   ```
 
-1. Edit `local.env` to match your environment.
+3. Edit `local.env` to match your environment.
 
-1. Deploy VPC and Compute Resources
+4. Deploy VPC and Compute Resources
 
   ```shell
+  source local.env
   (cd 010-vpc-infrastructure && ./main.sh apply)
   (cd 020-vpc-compute && ./main.sh apply)
   ```
