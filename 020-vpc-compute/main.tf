@@ -105,6 +105,44 @@ resource "ibm_is_instance" "workers" {
   tags = concat(local.tags, ["zone:${local.vpc_zones[0].zone}"])
 }
 
+resource "ibm_is_lb" "apiserver" {
+  name    = "${var.basename}-apiserver-lb"
+  subnets = [data.terraform_remote_state.vpc.outputs.subnet_id]
+  profile = "network-fixed"
+  type       = "public"
+  resource_group = data.terraform_remote_state.vpc.outputs.resource_group_id
+  tags = concat(local.tags, ["zone:${local.vpc_zones[0].zone}"])
+}
+
+resource "ibm_is_lb_listener" "apiserver_listener" {
+  lb                         = ibm_is_lb.apiserver.id
+  port                       = "6443"
+  protocol                   = "tcp"
+}
+
+resource "ibm_is_lb_pool" "apiserver_pool" {
+  lb                 = ibm_is_lb.apiserver.id
+  name               = "${var.basename}-apiserver-pool"
+  protocol           = "tcp"
+  algorithm          = "round_robin"
+  health_delay       = "5"
+  health_retries     = "2"
+  health_timeout     = "2"
+  health_type        = "tcp"
+  health_monitor_port = "6443"
+  health_monitor_url = "/"
+  depends_on         = [ibm_is_lb_listener.apiserver_listener]
+}
+
+resource "ibm_is_lb_pool_member" "apiserver_pool_member" {
+  count = 3
+  lb             = ibm_is_lb.apiserver.id
+  pool           = element(split("/", ibm_is_lb_pool.apiserver_pool.id), 1)
+  port           = 6443
+  target_id      = ibm_is_instance.controllers[count.index].id
+  weight         = 60
+}
+
 module "ansible_inventory" {
   source            = "../040-copy-required-files"
   bastion_public_ip = ibm_is_floating_ip.bastion.address
