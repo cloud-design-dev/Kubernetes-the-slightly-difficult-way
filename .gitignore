@@ -2,6 +2,11 @@
 **/.terraform/*
 **/*.terraform.lock.hcl
 **/deploy.log
+**/*.pem
+**/*.csr
+**/*.kubeconfig
+**/encryption-config.yaml
+
 # .tfstate files
 *.tfstate
 *.tfstate.*

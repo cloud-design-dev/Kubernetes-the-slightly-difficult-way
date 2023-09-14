@@ -1,0 +1,26 @@
+---
+- name: 'Copy all required files to the controllers'
+  gather_facts: true
+  hosts: controllers
+  tasks:
+    - name: "Copy files to controller nodes"
+      ansible.builtin.copy:
+        src: "../../030-certificate-authority/{{ cert_file }}"
+        dest: /root/{{ cert_file }}
+        owner: root
+        group: root
+        mode: "0600"
+      loop:
+        - ca.pem
+        - ca-key.pem
+        - kubernetes-key.pem
+        - kubernetes.pem
+        - service-account-key.pem
+        - service-account.pem
+        - admin.kubeconfig
+        - kube-controller-manager.kubeconfig
+        - kube-scheduler.kubeconfig
+        - encryption-config.yaml
+      loop_control:
+        loop_var: cert_file
+      when: inventory_hostname in groups['controllers']

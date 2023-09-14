@@ -1,0 +1,45 @@
+---
+- name: 'Copy files to worker nodes'
+  gather_facts: true
+  hosts: workers
+  tasks:
+    - name: Copy worker certs
+      ansible.builtin.copy:
+        src: "../../030-certificate-authority/{{ inventory_hostname }}.pem"
+        dest: "/root/{{ inventory_hostname }}.pem"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ groups['workers'] }}"
+    - name: Copy worker keys
+      ansible.builtin.copy:
+        src: "../../030-certificate-authority/{{ inventory_hostname }}-key.pem"
+        dest: "/root/{{ inventory_hostname }}-key.pem"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ groups['workers'] }}"
+    - name: Copy worker kubeconfig
+      ansible.builtin.copy:
+        src: "../../030-certificate-authority/{{ inventory_hostname }}.kubeconfig"
+        dest: "/root/{{ inventory_hostname }}.kubeconfig"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ groups['workers'] }}"
+    - name: Copy worker kubeconfig
+      ansible.builtin.copy:
+        src: "../../030-certificate-authority/kube-proxy.kubeconfig"
+        dest: "/root/kube-proxy.kubeconfig"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ groups['workers'] }}"
+    - name: Copy worker certificate authority
+      ansible.builtin.copy:
+        src: "../../030-certificate-authority/ca.pem"
+        dest: "/root/ca.pem"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ groups['workers'] }}"
