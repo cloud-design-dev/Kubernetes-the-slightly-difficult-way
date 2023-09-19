@@ -6,6 +6,7 @@
 **/*.csr
 **/*.kubeconfig
 **/encryption-config.yaml
+.vscode/
 
 # .tfstate files
 *.tfstate
