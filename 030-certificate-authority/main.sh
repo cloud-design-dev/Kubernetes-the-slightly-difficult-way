@@ -8,9 +8,9 @@ fi
 
 if [[ "$1" == "destroy" ]]; then
   terraform destroy
-  rm -rf .terraform *.csr *.pem
+  rm -rf .terraform *.csr *.pem *.kubeconfig
 fi
 
 if [[ "$1" == "clean" ]]; then
-  rm -rf .terraform .terraform.lock.hcl terraform.tfstate* *.csr *.pem
+  rm -rf .terraform .terraform.lock.hcl terraform.tfstate* *.csr *.pem *.kubeconfig
 fi
