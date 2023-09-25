@@ -1,0 +1,85 @@
+---
+- name: Configure control plane nodes
+  gather_facts: true
+  hosts: controllers
+  vars:
+    - GITHUB_URL: "https://github.com/etcd-io/etcd/releases/download"
+    - ETCD_VERSION: "v3.5.9"
+  tasks:
+    - name: "Copy files for apiserver, controller, scheduler to controller nodes"
+      ansible.builtin.copy:
+        src: "../../030-certificate-authority/{{ cert_file }}"
+        dest: /root/{{ cert_file }}
+        owner: root
+        group: root
+        mode: "0600"
+      loop:
+        - ca.pem
+        - ca-key.pem
+        - kubernetes-key.pem
+        - kubernetes.pem
+        - service-account-key.pem
+        - service-account.pem
+        - admin.kubeconfig
+        - kube-controller-manager.kubeconfig
+        - kube-scheduler.kubeconfig
+      loop_control:
+        loop_var: cert_file
+      when: inventory_hostname in groups['controllers']
+    - name: "Copy data encryption file to controller nodes"
+      ansible.builtin.copy:
+        src: "../encryption-config.yaml"
+        dest: /root/encryption-config.yaml
+        owner: root
+        group: root
+        mode: "0600"
+    - name: "Update system packages on control nodes"
+      ansible.builtin.apt:
+        update_cache: true
+      register: apt_status
+      until: apt_status is success
+      delay: 30
+      retries: 10
+      when: ansible_facts['os_family'] == "Debian"
+    - name: "Download etcd binary"
+      ansible.builtin.get_url:
+        url: "{{ GITHUB_URL }}/{{ ETCD_VERSION }}/etcd-{{ ETCD_VERSION }}-linux-amd64.tar.gz"
+        dest: /tmp/etcd-{{ ETCD_VERSION }}-linux-amd64.tar.gz
+        mode: "0644"
+    - name: Unarchive etcd to tmp
+      ansible.builtin.unarchive:
+        src: "/tmp/etcd-{{ ETCD_VERSION }}-linux-amd64.tar.gz"
+        dest: "/tmp/"
+        remote_src: true
+    - name: "Copy etcd binaries to path"
+      ansible.builtin.copy:
+        src: "/tmp/etcd-{{ ETCD_VERSION }}-linux-amd64/{{ etcd_file }}"
+        dest: /usr/local/bin/{{ etcd_file }}
+        owner: root
+        group: root
+        mode: "0755"
+        remote_src: true
+      loop:
+        - etcd
+        - etcdctl
+        - etcdutl
+      loop_control:
+        loop_var: etcd_file
+    - name: "Create etcd directories"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop:
+        - /etc/etcd
+        - /var/lib/etcd
+    - name: "Copy etcd required certificates and keys"
+      ansible.builtin.copy:
+        src: "/tmp/etcd-{{ ETCD_VERSION }}-linux-amd64/{{ etcd_file }}"
+        dest: /usr/local/bin/{{ etcd_file }}
+        owner: root
+        group: root
+        mode: "0755"
+        remote_src: true

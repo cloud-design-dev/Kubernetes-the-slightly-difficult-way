@@ -65,7 +65,7 @@ resource "null_resource" "kube_apiserver" {
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/05-kubernetes-configuration-files.md#the-kubelet-kubernetes-configuration-file
 resource "null_resource" "kube_config_cluster" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.kube_apiserver]
   count      = 3
   provisioner "local-exec" {
     command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://${data.terraform_remote_state.compute.outputs.lb_public_ip}:6443 --kubeconfig=${data.terraform_remote_state.compute.outputs.workers[count.index].name}.kubeconfig"
@@ -92,17 +92,17 @@ resource "null_resource" "kube_config_context" {
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/05-kubernetes-configuration-files.md#the-kubelet-kubernetes-configuration-file
 resource "null_resource" "kube_config_default" {
-  depends_on = [null_resource.kube_config_cluster]
+  depends_on = [null_resource.kube_config_context]
   count      = 3
   provisioner "local-exec" {
-    command = "kubectl config use-context default --kubeconfig=${data.terraform_remote_state.compute.outputs.workers[count.index].name}.kubeconfig"
+    command = "kubectl config use-context default --cluster=kubernetes-the-hard-way --kubeconfig=${data.terraform_remote_state.compute.outputs.workers[count.index].name}.kubeconfig"
   }
 }
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/05-kubernetes-configuration-files.md#the-kube-proxy-kubernetes-configuration-file
 
 resource "null_resource" "kube_proxy_cluster" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.kube_config_default]
   provisioner "local-exec" {
     command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://${data.terraform_remote_state.compute.outputs.lb_public_ip}:6443 --kubeconfig=kube-proxy.kubeconfig"
   }
@@ -123,14 +123,14 @@ resource "null_resource" "kube_proxy_context" {
 }
 
 resource "null_resource" "kube_proxy_default" {
-  depends_on = [null_resource.kube_proxy_cluster]
+  depends_on = [null_resource.kube_proxy_context]
   provisioner "local-exec" {
-    command = "kubectl config use-context default --kubeconfig=kube-proxy.kubeconfig"
+    command = "kubectl config use-context default --cluster=kubernetes-the-hard-way --kubeconfig=kube-proxy.kubeconfig"
   }
 }
 
 resource "null_resource" "kube_controller_cluster" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.kube_proxy_default]
   provisioner "local-exec" {
     command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://127.0.0.1:6443 --kubeconfig=kube-controller-manager.kubeconfig"
   }
@@ -141,7 +141,7 @@ resource "null_resource" "kube_controller_creds" {
   provisioner "local-exec" {
     command = "kubectl config set-credentials system:kube-controller-manager --client-certificate=kube-controller-manager.pem --client-key=kube-controller-manager-key.pem --embed-certs=true --kubeconfig=kube-controller-manager.kubeconfig"
   }
-} 
+}
 
 resource "null_resource" "kube_controller_context" {
   depends_on = [null_resource.kube_controller_cluster]
@@ -154,13 +154,13 @@ resource "null_resource" "kube_controller_context" {
 resource "null_resource" "kube_controller_default" {
   depends_on = [null_resource.kube_controller_cluster]
   provisioner "local-exec" {
-    command = "kubectl config use-context default --kubeconfig=kube-controller-manager.kubeconfig"
+    command = "kubectl config use-context default --cluster=kubernetes-the-hard-way --kubeconfig=kube-controller-manager.kubeconfig"
   }
 }
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/05-kubernetes-configuration-files.md#the-kube-scheduler-kubernetes-configuration-file
 resource "null_resource" "kube_scheduler_cluster" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.kube_controller_default]
   provisioner "local-exec" {
     command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://127.0.0.1:6443 --kubeconfig=kube-scheduler.kubeconfig"
   }
@@ -183,37 +183,37 @@ resource "null_resource" "kube_scheduler_context" {
 resource "null_resource" "kube_scheduler_default" {
   depends_on = [null_resource.kube_scheduler_cluster]
   provisioner "local-exec" {
-    command = "kubectl config use-context default --kubeconfig=kube-scheduler.kubeconfig"
+    command = "kubectl config use-context default --cluster=kubernetes-the-hard-way --kubeconfig=kube-scheduler.kubeconfig"
   }
 }
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/05-kubernetes-configuration-files.md#the-admin-kubernetes-configuration-file
 resource "null_resource" "admin_cluster" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.kube_scheduler_default]
   provisioner "local-exec" {
     command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://127.0.0.1:6443 --kubeconfig=admin.kubeconfig"
-    }
   }
+}
 
 resource "null_resource" "admin_creds" {
   depends_on = [null_resource.admin_cluster]
   provisioner "local-exec" {
     command = "kubectl config set-credentials admin --client-certificate=admin.pem --client-key=admin-key.pem --embed-certs=true --kubeconfig=admin.kubeconfig"
-    }
   }
+}
 
 resource "null_resource" "admin_context" {
   depends_on = [null_resource.admin_cluster]
   provisioner "local-exec" {
     command = "kubectl config set-context default --cluster=kubernetes-the-hard-way --user=admin --kubeconfig=admin.kubeconfig"
-    }
+  }
 }
 
 resource "null_resource" "admin_default" {
   depends_on = [null_resource.admin_cluster]
   provisioner "local-exec" {
-    command = "kubectl config use-context default --kubeconfig=admin.kubeconfig"
-    }
+    command = "kubectl config use-context default --cluster=kubernetes-the-hard-way --kubeconfig=admin.kubeconfig"
+  }
 }
 
 resource "random_string" "encryption_base" {
@@ -222,8 +222,8 @@ resource "random_string" "encryption_base" {
 }
 
 resource "local_file" "encryption_config" {
-  depends_on = [ random_string.encryption_base ]
-  content  = <<-EOT
+  depends_on = [random_string.encryption_base]
+  content    = <<-EOT
 kind: EncryptionConfig
 apiVersion: v1
 resources:
