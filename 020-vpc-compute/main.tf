@@ -99,7 +99,8 @@ resource "ibm_is_instance" "workers" {
     allow_ip_spoofing = var.allow_ip_spoofing
     security_groups   = [data.terraform_remote_state.vpc.outputs.cluster_security_group_id]
   }
-
+# user_data = --metadata pod-cidr=10.200.${i}.0/24 
+# Pull metadata from service
   zone = local.vpc_zones[0].zone
   keys = [data.ibm_is_ssh_key.sshkey.id]
   tags = concat(local.tags, ["zone:${local.vpc_zones[0].zone}"])

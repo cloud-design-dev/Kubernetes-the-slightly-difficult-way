@@ -1,5 +1,5 @@
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md#certificate-authority
-resource "null_resource" "certificate-authority" {
+resource "null_resource" "certificate_authority" {
   provisioner "local-exec" {
     command = "cfssl gencert -initca ca-csr.json | cfssljson -bare ca"
   }
@@ -7,7 +7,7 @@ resource "null_resource" "certificate-authority" {
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md#client-and-server-certificates
 resource "null_resource" "admin_client" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.certificate_authority]
   provisioner "local-exec" {
     command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=kubernetes admin-csr.json | cfssljson -bare admin"
   }
@@ -15,7 +15,7 @@ resource "null_resource" "admin_client" {
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md#the-kubelet-client-certificates
 resource "null_resource" "kubelet_client" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.admin_client]
   count      = 3
   provisioner "local-exec" {
     command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -hostname=${data.terraform_remote_state.compute.outputs.workers[count.index].name},${data.terraform_remote_state.compute.outputs.workers_private_ip[count.index]} -profile=kubernetes ${data.terraform_remote_state.compute.outputs.workers[count.index].name}-csr.json | cfssljson -bare ${data.terraform_remote_state.compute.outputs.workers[count.index].name}"
@@ -24,7 +24,7 @@ resource "null_resource" "kubelet_client" {
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md#the-controller-manager-client-certificate
 resource "null_resource" "controller_manager" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.kubelet_client]
   provisioner "local-exec" {
     command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=kubernetes kube-controller-manager-csr.json | cfssljson -bare kube-controller-manager"
   }
@@ -32,7 +32,7 @@ resource "null_resource" "controller_manager" {
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md#the-kube-proxy-client-certificate
 resource "null_resource" "kube_proxy" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.controller_manager]
   provisioner "local-exec" {
     command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=kubernetes kube-proxy-csr.json | cfssljson -bare kube-proxy"
   }
@@ -40,7 +40,7 @@ resource "null_resource" "kube_proxy" {
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md#the-kube-proxy-client-certificate
 resource "null_resource" "kube_scheduler" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.kube_proxy]
   provisioner "local-exec" {
     command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=kubernetes kube-scheduler-csr.json | cfssljson -bare kube-scheduler"
   }
@@ -48,7 +48,7 @@ resource "null_resource" "kube_scheduler" {
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md#the-kube-proxy-client-certificate
 resource "null_resource" "service_account" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.kube_scheduler]
   provisioner "local-exec" {
     command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=kubernetes service-account-csr.json | cfssljson -bare service-account"
   }
@@ -56,7 +56,7 @@ resource "null_resource" "service_account" {
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md#the-kube-proxy-client-certificate
 resource "null_resource" "kube_apiserver" {
-  depends_on = [null_resource.certificate-authority]
+  depends_on = [null_resource.service_account]
   provisioner "local-exec" {
     command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -hostname=10.32.0.1,${data.terraform_remote_state.compute.outputs.controller_private_ip[0]},${data.terraform_remote_state.compute.outputs.controller_private_ip[1]},${data.terraform_remote_state.compute.outputs.controller_private_ip[2]},${data.terraform_remote_state.compute.outputs.lb_public_ip},127.0.0.1,kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local -profile=kubernetes kubernetes-csr.json | cfssljson -bare kubernetes"
 
@@ -83,7 +83,7 @@ resource "null_resource" "kube_config_creds" {
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/05-kubernetes-configuration-files.md#the-kubelet-kubernetes-configuration-file
 resource "null_resource" "kube_config_context" {
-  depends_on = [null_resource.kube_config_cluster]
+  depends_on = [null_resource.kube_config_creds]
   count      = 3
   provisioner "local-exec" {
     command = "kubectl config set-context default --cluster=kubernetes-the-hard-way --user=system:node:${data.terraform_remote_state.compute.outputs.workers[count.index].name} --kubeconfig=${data.terraform_remote_state.compute.outputs.workers[count.index].name}.kubeconfig"
@@ -116,7 +116,7 @@ resource "null_resource" "kube_proxy_creds" {
 }
 
 resource "null_resource" "kube_proxy_context" {
-  depends_on = [null_resource.kube_proxy_cluster]
+  depends_on = [null_resource.kube_proxy_creds]
   provisioner "local-exec" {
     command = "kubectl config set-context default --cluster=kubernetes-the-hard-way --user=system:kube-proxy --kubeconfig=kube-proxy.kubeconfig"
   }
@@ -144,7 +144,7 @@ resource "null_resource" "kube_controller_creds" {
 }
 
 resource "null_resource" "kube_controller_context" {
-  depends_on = [null_resource.kube_controller_cluster]
+  depends_on = [null_resource.kube_controller_creds]
   provisioner "local-exec" {
     command = "kubectl config set-context default --cluster=kubernetes-the-hard-way --user=system:kube-controller-manager --kubeconfig=kube-controller-manager.kubeconfig"
   }
@@ -152,7 +152,7 @@ resource "null_resource" "kube_controller_context" {
 
 
 resource "null_resource" "kube_controller_default" {
-  depends_on = [null_resource.kube_controller_cluster]
+  depends_on = [null_resource.kube_controller_context]
   provisioner "local-exec" {
     command = "kubectl config use-context default --cluster=kubernetes-the-hard-way --kubeconfig=kube-controller-manager.kubeconfig"
   }
@@ -174,14 +174,14 @@ resource "null_resource" "kube_scheduler_creds" {
 }
 
 resource "null_resource" "kube_scheduler_context" {
-  depends_on = [null_resource.kube_scheduler_cluster]
+  depends_on = [null_resource.kube_scheduler_creds]
   provisioner "local-exec" {
     command = "kubectl config set-context default --cluster=kubernetes-the-hard-way --user=system:kube-scheduler --kubeconfig=kube-scheduler.kubeconfig"
   }
 }
 
 resource "null_resource" "kube_scheduler_default" {
-  depends_on = [null_resource.kube_scheduler_cluster]
+  depends_on = [null_resource.kube_scheduler_context]
   provisioner "local-exec" {
     command = "kubectl config use-context default --cluster=kubernetes-the-hard-way --kubeconfig=kube-scheduler.kubeconfig"
   }
@@ -203,14 +203,14 @@ resource "null_resource" "admin_creds" {
 }
 
 resource "null_resource" "admin_context" {
-  depends_on = [null_resource.admin_cluster]
+  depends_on = [null_resource.admin_creds]
   provisioner "local-exec" {
     command = "kubectl config set-context default --cluster=kubernetes-the-hard-way --user=admin --kubeconfig=admin.kubeconfig"
   }
 }
 
 resource "null_resource" "admin_default" {
-  depends_on = [null_resource.admin_cluster]
+  depends_on = [null_resource.admin_context]
   provisioner "local-exec" {
     command = "kubectl config use-context default --cluster=kubernetes-the-hard-way --kubeconfig=admin.kubeconfig"
   }
