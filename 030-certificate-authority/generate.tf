@@ -237,5 +237,5 @@ resources:
       - identity: {}
   EOT
 
-  filename = "../040-copy-required-files/encryption-config.yaml"
+  filename = "./encryption-config.yaml"
 }

@@ -2,7 +2,8 @@ locals {
   tags = [
     "owner:${var.owner}",
     "provider:ibm",
-    "region:${var.region}"
+    "region:${var.region}",
+    "deployment:${var.basename}"
   ]
   zones = length(data.ibm_is_zones.regional.zones)
   vpc_zones = {
@@ -49,7 +50,7 @@ resource "ibm_is_floating_ip" "bastion" {
 
 resource "ibm_is_instance" "controllers" {
   count          = 3
-  name           = "${var.basename}-controller-${count.index}"
+  name           = "controller-${count.index}"
   vpc            = data.terraform_remote_state.vpc.outputs.vpc_id
   image          = data.ibm_is_image.base.id
   profile        = var.instance_profile
@@ -61,8 +62,9 @@ resource "ibm_is_instance" "controllers" {
     response_hop_limit = 5
   }
 
+
   boot_volume {
-    name = "${var.basename}-controller-${count.index}-vol"
+    name = "controller-${count.index}-vol"
   }
 
   primary_network_interface {
@@ -78,7 +80,7 @@ resource "ibm_is_instance" "controllers" {
 
 resource "ibm_is_instance" "workers" {
   count          = 3
-  name           = "${var.basename}-worker-${count.index}"
+  name           = "worker-${count.index}"
   vpc            = data.terraform_remote_state.vpc.outputs.vpc_id
   image          = data.ibm_is_image.base.id
   profile        = var.instance_profile
@@ -91,7 +93,7 @@ resource "ibm_is_instance" "workers" {
   }
 
   boot_volume {
-    name = "${var.basename}-worker-${count.index}-vol"
+    name = "worker-${count.index}-vol"
   }
 
   primary_network_interface {
@@ -99,8 +101,10 @@ resource "ibm_is_instance" "workers" {
     allow_ip_spoofing = var.allow_ip_spoofing
     security_groups   = [data.terraform_remote_state.vpc.outputs.cluster_security_group_id]
   }
-# user_data = --metadata pod-cidr=10.200.${i}.0/24 
-# Pull metadata from service
+
+  user_data = templatefile("${path.module}/workers.tftpl", {
+  pod_cidr = "10.200.${count.index}.0/24" })
+
   zone = local.vpc_zones[0].zone
   keys = [data.ibm_is_ssh_key.sshkey.id]
   tags = concat(local.tags, ["zone:${local.vpc_zones[0].zone}"])
@@ -145,17 +149,18 @@ resource "ibm_is_lb_pool_member" "apiserver_pool_member" {
 }
 
 module "ansible_inventory" {
-  source            = "../040-copy-required-files"
+  source            = "../040-configure-systems"
   bastion_public_ip = ibm_is_floating_ip.bastion.address
   controllers       = ibm_is_instance.controllers.*
   workers           = ibm_is_instance.workers.*
+  load_balancer_ip  = ibm_is_lb.apiserver.public_ips[0]
 }
 
 resource "local_file" "worker_csr" {
   count    = 3
   content  = <<EOF
 {
-  "CN": "system:node:${var.basename}-worker-${count.index}",
+  "CN": "system:node:worker-${count.index}",
   "key": {
     "algo": "rsa",
     "size": 2048
@@ -171,5 +176,5 @@ resource "local_file" "worker_csr" {
   ]
 }
 EOF
-  filename = "../030-certificate-authority/${var.basename}-worker-${count.index}-csr.json"
+  filename = "../030-certificate-authority/worker-${count.index}-csr.json"
 }

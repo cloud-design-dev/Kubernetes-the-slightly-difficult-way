@@ -1,0 +1,56 @@
+---
+- name: 'Test medatada service'
+  gather_facts: true
+  hosts: workers
+  tasks:
+    - name: Get timestamp from the system
+      ansible.builtin.shell: "date +%Y-%m-%d"
+      register: tstamp
+
+    - name: Set variable with current date
+      set_fact:
+        curent_date: "{{ tstamp.stdout[0:10]}}"
+
+    - name: Set URL with current date
+      ansible.builtin.set_fact:
+        curent_url: "https://api.metadata.cloud.ibm.com/instance_identity/v1/token?version={{ curent_date }}"
+
+    - name: Print out URL
+      ansible.builtin.debug: 
+        msg: "{{ curent_url }}"
+
+
+    - name: Get token from metadata service 
+      ansible.builtin.uri:
+        url: "https://api.metadata.cloud.ibm.com/instance_identity/v1/token?version={{ curent_date }}"
+        user: ""
+        password: ""
+        method: PUT
+        body_format: json
+        headers:
+          Content-Type: application/json
+          Metadata-Flavor: "ibm"
+        validate_certs: false
+      register: metadata_token
+
+    - name: Get metadata from metadata service
+      ansible.builtin.uri:
+        url: "https://169.254.169.254/metadata/v1/instance/initialization?version={{ curent_date }}"
+        method: GET
+        headers:
+          Accept: application/json
+          Authorization: "Bearer {{ metadata_token.json.access_token }}"
+        validate_certs: false
+      register: metadata
+
+    - name: Extract user_data from json response
+      ansible.builtin.set_fact:
+        user_data: "{{ metadata.json | json_query('user_data') }}"
+
+    - name: Extract POD_CIDR 
+      ansible.builtin.set_fact:
+        pod_cidr: "{{ user_data | regex_replace('POD_CIDR=(.*)', '\\1') }}"
+
+    - name: Print out POD_CIDR
+      ansible.builtin.debug: 
+        msg: "{{ pod_cidr }}"

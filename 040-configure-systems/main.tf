@@ -8,3 +8,12 @@ resource "local_file" "ansible-inventory" {
   )
   filename = "${path.module}/inventory.ini"
 }
+
+resource "local_file" "ansible-vars" {
+  content = templatefile("${path.module}/templates/vars.tmpl",
+    {
+      load_balancer_ip = var.load_balancer_ip
+    }
+  )
+  filename = "${path.module}/playbooks/vars.yml"
+}
