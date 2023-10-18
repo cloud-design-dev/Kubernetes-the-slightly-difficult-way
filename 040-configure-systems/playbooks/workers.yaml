@@ -8,20 +8,38 @@
     - CNI_VERSION: "v1.3.0"
     - CNRD_VERSION: "1.7.7"
     - K8S_VERSION: "v1.27.6"
+    - SOURCE_PATH: "../../030-certificate-authority"
+    - FILES_PATH: "../files"
+    - TEMPLATES_PATH: "../templates"
   tasks:
-    - name: Enumerate all worker nodes within the hosts file
+    # - name: Enumerate all worker nodes within the hosts file
+    #   ansible.builtin.blockinfile:
+    #     dest: /etc/hosts
+    #     marker: "# {mark} ANSIBLE MANAGED: k8s controller hosts"
+    #     content: |
+    #       {% for host in groups['controllers'] %}
+    #       {{ hostvars[inventory_hostname].ansible_default_ipv4.address }} {{ hostvars[inventory_hostname].ansible_hostname }}
+    #       {% endfor %}
+    #       {% for host in groups['workers'] %}
+    #       {{ hostvars[inventory_hostname].ansible_default_ipv4.address }} {{ hostvars[inventory_hostname].ansible_hostname }}
+    #       {% endfor %}
+    - name: Enumerate all controllers within the hosts file
       ansible.builtin.blockinfile:
         dest: /etc/hosts
-        marker: "# {mark} ANSIBLE MANAGED: k8s controller hosts"
+        marker: "# {mark} ANSIBLE MANAGED: controller hosts"
         content: |
           {% for host in groups['controllers'] %}
-          {{ hostvars[inventory_hostname].ansible_default_ipv4.address }} {{ hostvars[inventory_hostname].ansible_hostname }}
+          {{ hostvars[host].ansible_default_ipv4.address }} {{ hostvars[host].ansible_hostname }}
           {% endfor %}
+
+    - name: Enumerate all workers within the hosts file
+      ansible.builtin.blockinfile:
+        dest: /etc/hosts
+        marker: "# {mark} ANSIBLE MANAGED: worker hosts"
+        content: |
           {% for host in groups['workers'] %}
-          {{ hostvars[inventory_hostname].ansible_default_ipv4.address }} {{ hostvars[inventory_hostname].ansible_hostname }}
+          {{ hostvars[host].ansible_default_ipv4.address }} {{ hostvars[host].ansible_hostname }}
           {% endfor %}
-      when:
-        - inventory_hostname in groups['workers']
 
     - name: "Install required apt packages"
       ansible.builtin.apt:
@@ -32,15 +50,6 @@
         - socat
         - conntrack
         - ipset
-    - name: Disable SWAP since kubernetes can't work with swap enabled (1/2)
-      shell: |
-        swapoff -a
-
-    - name: Disable SWAP in fstab since kubernetes can't work with swap enabled (2/2)
-      replace:
-        path: /etc/fstab
-        regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
-        replace: '# \1'
 
     - name: "Create kubernetes directories"
       ansible.builtin.file:
@@ -59,6 +68,16 @@
         - /root/containerd
         - /etc/containerd
 
+    - name: "Disable SWAP since kubernetes can't work with swap enabled (1/2)"
+      ansible.builtin.shell: |
+        swapoff -a
+
+    - name: "Disable SWAP in fstab since kubernetes can't work with swap enabled (2/2)"
+      ansible.builtin.replace:
+        path: /etc/fstab
+        regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
+        replace: '# \1'
+
     - name: "Download CRI tarball"
       ansible.builtin.get_url:
         url: "https://github.com/kubernetes-sigs/cri-tools/releases/download/{{ CRI_VERSION }}/crictl-{{ CRI_VERSION }}-linux-amd64.tar.gz"
@@ -69,7 +88,7 @@
       ansible.builtin.unarchive:
         src: "/tmp/crictl-{{ CRI_VERSION }}-linux-amd64.tar.gz"
         dest: "/usr/local/bin/"
-        remote_src: true    
+        remote_src: true
 
     - name: "Download runc binary"
       ansible.builtin.get_url:
@@ -82,26 +101,26 @@
         url: https://github.com/containernetworking/plugins/releases/download/{{ CNI_VERSION }}/cni-plugins-linux-amd64-{{ CNI_VERSION }}.tgz
         dest: /tmp/cni-plugins-linux-amd64-{{ CNI_VERSION }}.tgz
         owner: root
-        group: root  
+        group: root
 
     - name: Unarchive CNI plugins in to /opt/cni/bin/
       ansible.builtin.unarchive:
         src: "/tmp/cni-plugins-linux-amd64-{{ CNI_VERSION }}.tgz"
         dest: "/opt/cni/bin/"
-        remote_src: true    
+        remote_src: true
 
     - name: "Download containerd binaries"
       ansible.builtin.get_url:
         url: https://github.com/containerd/containerd/releases/download/v{{ CNRD_VERSION }}/containerd-{{ CNRD_VERSION }}-linux-amd64.tar.gz
         dest: /tmp/containerd-{{ CNRD_VERSION }}-linux-amd64.tar.gz
         owner: root
-        group: root  
+        group: root
 
     - name: Unarchive containerd binaries in to /bin
       ansible.builtin.unarchive:
         src: /tmp/containerd-{{ CNRD_VERSION }}-linux-amd64.tar.gz
         dest: "/tmp"
-        remote_src: true    
+        remote_src: true
 
     - name: "Copy containerd binaries to /bin"
       ansible.builtin.copy:
@@ -167,12 +186,12 @@
 
     - name: Template container network interface config file
       ansible.builtin.template:
-        src: ../templates/cni-conf.j2
+        src: "{{ TEMPLATES_PATH }}/cni-conf.j2"
         dest: /etc/cni/net.d/10-mybridge.conf
 
     - name: "Copy loopback.conf for CNI"
       ansible.builtin.copy:
-        src: "../files/99-loopback.conf"
+        src: "{{ FILES_PATH }}/99-loopback.conf"
         dest: /etc/cni/net.d/99-loopback.conf
         owner: root
         group: root
@@ -180,7 +199,7 @@
 
     - name: "Copy containerd configuration file to controllers"
       ansible.builtin.copy:
-        src: "../files/config.toml"
+        src: "{{ FILES_PATH }}/config.toml"
         dest: /etc/containerd/config.toml
         owner: root
         group: root
@@ -188,7 +207,7 @@
 
     - name: "Copy containerd systemd unit file to controllers"
       ansible.builtin.copy:
-        src: "../files/containerd.service"
+        src: "{{ FILES_PATH }}/containerd.service"
         dest: /etc/systemd/system/containerd.service
         owner: root
         group: root
@@ -199,7 +218,7 @@
 
     - name: Copy Certificate authority private certificate to workers
       ansible.builtin.copy:
-        src: "../../030-certificate-authority/ca.pem"
+        src: "{{ SOURCE_PATH }}/ca.pem"
         dest: "/var/lib/kubelet/ca.pem"
         owner: root
         group: root
@@ -207,8 +226,8 @@
 
     - name: Copy worker node certs
       ansible.builtin.copy:
-        src: "../../030-certificate-authority/{{ inventory_hostname }}.pem"
-        dest: "/root/{{ inventory_hostname }}.pem"
+        src: "{{ SOURCE_PATH }}/{{ inventory_hostname }}.pem"
+        dest: "/var/lib/kubelet/{{ inventory_hostname }}.pem"
         owner: root
         group: root
         mode: "0600"
@@ -216,7 +235,7 @@
 
     - name: Copy worker keys
       ansible.builtin.copy:
-        src: "../../030-certificate-authority/{{ inventory_hostname }}-key.pem"
+        src: "{{ SOURCE_PATH }}/{{ inventory_hostname }}-key.pem"
         dest: "/var/lib/kubelet/{{ inventory_hostname }}-key.pem"
         owner: root
         group: root
@@ -225,7 +244,7 @@
 
     - name: Copy worker nodes kubeconfig
       ansible.builtin.copy:
-        src: "../../030-certificate-authority/{{ inventory_hostname }}.kubeconfig"
+        src: "{{ SOURCE_PATH }}/{{ inventory_hostname }}.kubeconfig"
         dest: "/var/lib/kubelet/kubeconfig"
         owner: root
         group: root
@@ -234,12 +253,12 @@
 
     - name: Template kubelet-config file
       ansible.builtin.template:
-        src: ../templates/kubelet-config.j2
+        src: "{{ TEMPLATES_PATH }}/kubelet-config.j2"
         dest: /var/lib/kubelet/kubelet-config.yaml
 
     - name: Copy kubelet systemd unit file
       ansible.builtin.copy:
-        src: "../files/kubelet.service"
+        src: "{{ FILES_PATH }}/kubelet.service"
         dest: "/etc/systemd/system/kubelet.service"
         owner: root
         group: root
@@ -247,19 +266,27 @@
 
     - name: Copy kube-proxy configuration file
       ansible.builtin.copy:
-        src: "../../030-certificate-authority/kube-proxy.kubeconfig"
+        src: "{{ SOURCE_PATH }}/kube-proxy.kubeconfig"
         dest: "/var/lib/kube-proxy/kubeconfig"
         owner: root
         group: root
-        mode: "0600"        
+        mode: "0600"
+
+    - name: Copy kube-proxy yaml configuration file
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/kube-proxy-config.yaml"
+        dest: "/var/lib/kube-proxy/kube-proxy-config.yaml"
+        owner: root
+        group: root
+        mode: "0600"
 
     - name: Copy Certificate authority private certificate to workers
       ansible.builtin.copy:
-        src: "../files/kube-proxy.service"
+        src: "{{ FILES_PATH }}/kube-proxy.service"
         dest: "/etc/systemd/system/kube-proxy.service"
         owner: root
         group: root
-        mode: "0600"    
+        mode: "0600"
 
     - name: "Enable and start containerd service"
       ansible.builtin.systemd:

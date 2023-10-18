@@ -119,13 +119,8 @@ resource "ibm_is_lb" "apiserver" {
   tags           = concat(local.tags, ["zone:${local.vpc_zones[0].zone}"])
 }
 
-resource "ibm_is_lb_listener" "apiserver_listener" {
-  lb       = ibm_is_lb.apiserver.id
-  port     = "6443"
-  protocol = "tcp"
-}
-
 resource "ibm_is_lb_pool" "apiserver_pool" {
+  depends_on          = [ibm_is_lb.apiserver]
   lb                  = ibm_is_lb.apiserver.id
   name                = "${var.basename}-apiserver-pool"
   protocol            = "tcp"
@@ -135,8 +130,15 @@ resource "ibm_is_lb_pool" "apiserver_pool" {
   health_timeout      = "2"
   health_type         = "tcp"
   health_monitor_port = "6443"
-  health_monitor_url  = "/"
-  depends_on          = [ibm_is_lb_listener.apiserver_listener]
+  health_monitor_url  = "/healthz"
+}
+
+resource "ibm_is_lb_listener" "apiserver_listener" {
+  depends_on   = [ibm_is_lb_pool.apiserver_pool]
+  lb           = ibm_is_lb.apiserver.id
+  port         = "6443"
+  protocol     = "tcp"
+  default_pool = element(split("/", ibm_is_lb_pool.apiserver_pool.id), 1)
 }
 
 resource "ibm_is_lb_pool_member" "apiserver_pool_member" {
