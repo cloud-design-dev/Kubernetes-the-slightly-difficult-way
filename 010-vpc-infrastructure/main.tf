@@ -51,7 +51,7 @@ resource "ibm_is_subnet" "cluster_subnet" {
   vpc                      = ibm_is_vpc.vpc.id
   zone                     = local.vpc_zones[0].zone
   total_ipv4_address_count = "128"
-  public_gateway           = ibm_is_public_gateway.pgws.id
+  public_gateway           = ibm_is_public_gateway.cluster_pgw.id
 }
 
 module "bastion_security_group" {
@@ -59,7 +59,7 @@ module "bastion_security_group" {
   version               = "1.1.1"
   create_security_group = true
   name                  = "${var.basename}-bastion-sg"
-  vpc_id                = module.vpc.vpc_id[0]
+  vpc_id                = ibm_is_vpc.vpc.id
   resource_group_id     = module.resource_group.resource_group_id
   security_group_rules  = local.bastion_rules
 }
@@ -69,7 +69,7 @@ module "cluster_security_group" {
   version               = "1.1.1"
   create_security_group = true
   name                  = "${var.basename}-cluster-sg"
-  vpc_id                = module.vpc.vpc_id[0]
+  vpc_id                = ibm_is_vpc.vpc.id
   resource_group_id     = module.resource_group.resource_group_id
   security_group_rules  = local.cluster_rules
 }
