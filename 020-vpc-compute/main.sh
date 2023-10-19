@@ -13,3 +13,8 @@ fi
 if [[ "$1" == "clean" ]]; then
   rm -rf .terraform .terraform.lock.hcl terraform.tfstate*
 fi
+
+if [[ "$1" == "auto-approve" ]]; then
+  terraform init
+  terraform apply -auto-approve
+fi

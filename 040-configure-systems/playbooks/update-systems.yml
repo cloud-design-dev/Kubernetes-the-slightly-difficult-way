@@ -1,13 +1,14 @@
 ---
 - name: 'Update all deployed systems'
   hosts: all
+  gather_facts: true
   tasks:
-    - name: Update yum packages on RPM based systems 
+    - name: "Update yum packages on RPM based systems" 
       ansible.builtin.yum: 
         name=* 
         state=latest
       when: ansible_facts['os_family'] == "RedHat"    
-    - name: Update apt packages
+    - name: "Update apt packages on DEB based systems"
       ansible.builtin.apt: 
         upgrade=yes 
         update_cache=yes
@@ -15,4 +16,17 @@
       until: apt_status is success
       delay: 10
       retries: 10
-      when: ansible_facts['os_family'] == "Debian"   
+      when: ansible_facts['os_family'] == "Debian"
+    - name: "Enumerate all controllers and workers within the hosts file"
+      ansible.builtin.blockinfile:
+        dest: /etc/hosts
+        marker: "# {mark} ANSIBLE MANAGED: kubernetes hosts"
+        content: |
+          {% for host in groups['workers'] %}
+          {{ hostvars[host].ansible_default_ipv4.address }} {{ hostvars[host].ansible_hostname }}
+          {% endfor %}
+          {% for host in groups['controllers'] %}
+          {{ hostvars[host].ansible_default_ipv4.address }} {{ hostvars[host].ansible_hostname }}
+          {% endfor %}
+
+    

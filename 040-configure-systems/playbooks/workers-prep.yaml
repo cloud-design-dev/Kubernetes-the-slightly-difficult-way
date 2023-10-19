@@ -1,0 +1,47 @@
+---
+- name: "Prepare worker nodes for kubernetes installation"
+  gather_facts: true
+  hosts: workers
+  tasks:
+
+    - name: "Install required apt packages for kubernetes worker nodes"
+      ansible.builtin.apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: true
+      loop:
+        - socat
+        - conntrack
+        - ipset
+
+    - name: "Create kubernetes directories"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop:
+        - /etc/cni/net.d
+        - /opt/cni/bin
+        - /var/lib/kubelet
+        - /var/lib/kube-proxy
+        - /var/lib/kubernetes
+        - /var/run/kubernetes
+        - /root/containerd
+        - /etc/containerd
+        - /sys/fs/cgroup/systemd
+
+    - name: "Disable SWAP since kubernetes can't work with swap enabled (1/2)"
+      ansible.builtin.shell: |
+        swapoff -a
+
+    - name: "Disable SWAP in fstab since kubernetes can't work with swap enabled (2/2)"
+      ansible.builtin.replace:
+        path: /etc/fstab
+        regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
+        replace: '# \1'
+
+    - name: "Reboot the worker nodes after disabling swap and updating"
+      ansible.builtin.reboot:
+        reboot_timeout: 120

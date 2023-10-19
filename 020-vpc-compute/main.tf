@@ -110,6 +110,17 @@ resource "ibm_is_instance" "workers" {
   tags = concat(local.tags, ["zone:${local.vpc_zones[0].zone}"])
 }
 
+resource "ibm_is_vpc_routing_table_route" "pod_cidrs" {
+  count         = 3
+  vpc           = data.terraform_remote_state.vpc.outputs.vpc_id
+  routing_table = data.terraform_remote_state.vpc.outputs.vpc_default_routing_table_id
+  zone          = local.vpc_zones[0].zone
+  name          = "worker-${count.index}-pod-cidr-route"
+  destination   = "10.200.0.${count.index}/24"
+  action        = "deliver"
+  next_hop      = ibm_is_instance.workers[count.index].primary_network_interface[0].primary_ipv4_address
+}
+
 resource "ibm_is_lb" "apiserver" {
   name           = "${var.basename}-apiserver-lb"
   subnets        = [data.terraform_remote_state.vpc.outputs.subnet_id]
@@ -179,4 +190,47 @@ resource "local_file" "worker_csr" {
 }
 EOF
   filename = "../030-certificate-authority/worker-${count.index}-csr.json"
+}
+
+
+resource "ibm_resource_instance" "project_instance" {
+  name              = "${var.basename}-dns-instance"
+  resource_group_id = data.terraform_remote_state.vpc.outputs.resource_group_id
+  location          = "global"
+  service           = "dns-svcs"
+  plan              = "standard-dns"
+}
+
+resource "ibm_dns_zone" "zone" {
+  name        = "gh40.local"
+  instance_id = ibm_resource_instance.project_instance.guid
+  description = "Private DNS Zone for VPC K8s cluster."
+  label       = "testlabel"
+}
+
+resource "ibm_dns_permitted_network" "permitted_network" {
+  instance_id = ibm_resource_instance.project_instance.guid
+  zone_id     = ibm_dns_zone.zone.zone_id
+  vpc_crn     = data.terraform_remote_state.vpc.outputs.vpc_crn
+  type        = "vpc"
+}
+
+resource "ibm_dns_resource_record" "controllers" {
+  count       = 3
+  instance_id = ibm_resource_instance.project_instance.guid
+  zone_id     = ibm_dns_zone.zone.zone_id
+  type        = "A"
+  name        = "controller-${count.index}"
+  rdata       = ibm_is_instance.controllers[count.index].primary_network_interface[0].primary_ipv4_address
+  ttl         = 3600
+}
+
+resource "ibm_dns_resource_record" "workers" {
+  count       = 3
+  instance_id = ibm_resource_instance.project_instance.guid
+  zone_id     = ibm_dns_zone.zone.zone_id
+  type        = "A"
+  name        = "worker-${count.index}"
+  rdata       = element(ibm_is_instance.workers[count.index].primary_network_interface[0].primary_ipv4_address)
+  ttl         = 3600
 }

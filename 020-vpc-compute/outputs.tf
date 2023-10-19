@@ -10,9 +10,9 @@ output "controllers" {
   value = ibm_is_instance.controllers[*]
 }
 
-# output "lb_public_ip" {
-#   value = ibm_is_lb.apiserver.public_ips[0]
-# }
+output "lb_public_ip" {
+  value = ibm_is_lb.apiserver.public_ips[0]
+}
 
 output "workers" {
   value = ibm_is_instance.workers[*]

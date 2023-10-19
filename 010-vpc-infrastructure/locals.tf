@@ -2,7 +2,8 @@ locals {
   tags = [
     "owner:${var.owner}",
     "provider:ibm",
-    "region:${var.region}"
+    "region:${var.region}",
+    "deployment:${var.basename}"
   ]
 
   bastion_rules = [

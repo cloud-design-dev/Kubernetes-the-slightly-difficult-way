@@ -131,3 +131,5 @@
       ansible.builtin.command: "kubectl apply --kubeconfig /root/admin.kubeconfig -f /root/rbac-config.yaml"
       register: rbac_status
       changed_when: rbac_status.rc != 0
+      delegate_to: "{{ groups['controllers'][0] }}"
+

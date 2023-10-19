@@ -1,5 +1,5 @@
 ---
-- name: 'Copy files to worker nodes'
+- name: 'Install container runtime and kubernetes binaries on worker nodes'
   gather_facts: true
   hosts: workers
   vars:
@@ -12,85 +12,19 @@
     - FILES_PATH: "../files"
     - TEMPLATES_PATH: "../templates"
   tasks:
-    # - name: Enumerate all worker nodes within the hosts file
-    #   ansible.builtin.blockinfile:
-    #     dest: /etc/hosts
-    #     marker: "# {mark} ANSIBLE MANAGED: k8s controller hosts"
-    #     content: |
-    #       {% for host in groups['controllers'] %}
-    #       {{ hostvars[inventory_hostname].ansible_default_ipv4.address }} {{ hostvars[inventory_hostname].ansible_hostname }}
-    #       {% endfor %}
-    #       {% for host in groups['workers'] %}
-    #       {{ hostvars[inventory_hostname].ansible_default_ipv4.address }} {{ hostvars[inventory_hostname].ansible_hostname }}
-    #       {% endfor %}
-    - name: Enumerate all controllers within the hosts file
-      ansible.builtin.blockinfile:
-        dest: /etc/hosts
-        marker: "# {mark} ANSIBLE MANAGED: controller hosts"
-        content: |
-          {% for host in groups['controllers'] %}
-          {{ hostvars[host].ansible_default_ipv4.address }} {{ hostvars[host].ansible_hostname }}
-          {% endfor %}
-
-    - name: Enumerate all workers within the hosts file
-      ansible.builtin.blockinfile:
-        dest: /etc/hosts
-        marker: "# {mark} ANSIBLE MANAGED: worker hosts"
-        content: |
-          {% for host in groups['workers'] %}
-          {{ hostvars[host].ansible_default_ipv4.address }} {{ hostvars[host].ansible_hostname }}
-          {% endfor %}
-
-    - name: "Install required apt packages"
-      ansible.builtin.apt:
-        name: "{{ item }}"
-        state: present
-        update_cache: true
-      loop:
-        - socat
-        - conntrack
-        - ipset
-
-    - name: "Create kubernetes directories"
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: directory
-        owner: root
-        group: root
-        mode: "0700"
-      loop:
-        - /etc/cni/net.d
-        - /opt/cni/bin
-        - /var/lib/kubelet
-        - /var/lib/kube-proxy
-        - /var/lib/kubernetes
-        - /var/run/kubernetes
-        - /root/containerd
-        - /etc/containerd
-
-    - name: "Disable SWAP since kubernetes can't work with swap enabled (1/2)"
-      ansible.builtin.shell: |
-        swapoff -a
-
-    - name: "Disable SWAP in fstab since kubernetes can't work with swap enabled (2/2)"
-      ansible.builtin.replace:
-        path: /etc/fstab
-        regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
-        replace: '# \1'
-
     - name: "Download CRI tarball"
       ansible.builtin.get_url:
         url: "https://github.com/kubernetes-sigs/cri-tools/releases/download/{{ CRI_VERSION }}/crictl-{{ CRI_VERSION }}-linux-amd64.tar.gz"
         dest: "/tmp/crictl-{{ CRI_VERSION }}-linux-amd64.tar.gz"
         mode: "0644"
 
-    - name: Unarchive CRI in to /usr/local/bin
+    - name: "Unarchive CRI in to /usr/local/bin"
       ansible.builtin.unarchive:
         src: "/tmp/crictl-{{ CRI_VERSION }}-linux-amd64.tar.gz"
         dest: "/usr/local/bin/"
         remote_src: true
 
-    - name: "Download runc binary"
+    - name: "Download runc binary, add to path, and mark as executable"
       ansible.builtin.get_url:
         url: "https://github.com/opencontainers/runc/releases/download/{{ RUNC_VERSION }}/runc.amd64 "
         dest: "/usr/local/bin/runc"
@@ -103,7 +37,7 @@
         owner: root
         group: root
 
-    - name: Unarchive CNI plugins in to /opt/cni/bin/
+    - name: "Unarchive CNI plugins in to /opt/cni/bin/"
       ansible.builtin.unarchive:
         src: "/tmp/cni-plugins-linux-amd64-{{ CNI_VERSION }}.tgz"
         dest: "/opt/cni/bin/"
@@ -116,7 +50,7 @@
         owner: root
         group: root
 
-    - name: Unarchive containerd binaries in to /bin
+    - name: "Unarchive containerd binaries in to /bin"
       ansible.builtin.unarchive:
         src: /tmp/containerd-{{ CNRD_VERSION }}-linux-amd64.tar.gz
         dest: "/tmp"
@@ -131,7 +65,20 @@
         mode: "0755"
         remote_src: true
 
-    - name: "Download kubernetes binaries"
+    - name: "Create cgroup directory for containerd"
+      ansible.builtin.file:
+        path: "/sys/fs/cgroup/systemd"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: "Remount systemd for use with cgroups"
+      ansible.builtin.shell:
+        cmd: mount -t cgroup -o none,name=systemd cgroup /sys/fs/cgroup/systemd
+        warn: false
+
+    - name: "Download kube-proxy, kubelet, and kubectl binaries, add to path and mark as executable"
       ansible.builtin.get_url:
         url: https://storage.googleapis.com/kubernetes-release/release/{{ K8S_VERSION }}/bin/linux/amd64/{{ binary_file }}
         dest: /usr/local/bin/{{ binary_file }}
@@ -145,15 +92,15 @@
       loop_control:
         loop_var: binary_file
 
-    - name: Get timestamp from the system
+    - name: "Get timestamp from the system"
       ansible.builtin.shell: "date +%Y-%m-%d"
       register: tstamp
 
-    - name: Set variable with current date
+    - name: "Set variable with current date"
       set_fact:
         curent_date: "{{ tstamp.stdout[0:10]}}"
 
-    - name: Get token from metadata service 
+    - name: "Get token from IBM Cloud metadata service" 
       ansible.builtin.uri:
         url: "https://api.metadata.cloud.ibm.com/instance_identity/v1/token?version={{ curent_date }}"
         user: ""
@@ -166,7 +113,7 @@
         validate_certs: false
       register: metadata_token
 
-    - name: Get metadata from metadata service
+    - name: "Retrieve POD CIDR from IBM Cloud metadata service"
       ansible.builtin.uri:
         url: "https://169.254.169.254/metadata/v1/instance/initialization?version={{ curent_date }}"
         method: GET
@@ -176,20 +123,20 @@
         validate_certs: false
       register: metadata
 
-    - name: Extract user_data
+    - name: "Extract user_data from metadata"
       ansible.builtin.set_fact:
         user_data: "{{ metadata.json | json_query('user_data') }}"
 
-    - name: Extract POD_CIDR 
+    - name: "Extract POD_CIDR from user_data" 
       ansible.builtin.set_fact:
         pod_cidr: "{{ user_data | regex_replace('POD_CIDR=(.*)', '\\1') }}"
 
-    - name: Template container network interface config file
+    - name: "Template container network interface config file"
       ansible.builtin.template:
         src: "{{ TEMPLATES_PATH }}/cni-conf.j2"
         dest: /etc/cni/net.d/10-mybridge.conf
 
-    - name: "Copy loopback.conf for CNI"
+    - name: "Copy loopback.conf for container network interface"
       ansible.builtin.copy:
         src: "{{ FILES_PATH }}/99-loopback.conf"
         dest: /etc/cni/net.d/99-loopback.conf
@@ -213,10 +160,7 @@
         group: root
         mode: "0600"
 
-
-# /var/lib/kubelet/
-
-    - name: Copy Certificate authority private certificate to workers
+    - name: "Copy Certificate authority private certificate for kubelet"
       ansible.builtin.copy:
         src: "{{ SOURCE_PATH }}/ca.pem"
         dest: "/var/lib/kubelet/ca.pem"
@@ -224,7 +168,16 @@
         group: root
         mode: "0600"
 
-    - name: Copy worker node certs
+    - name: "Copy Certificate authority private certificate to kubernetes directory"
+      ansible.builtin.copy:
+        src: "{{ SOURCE_PATH }}/ca.pem"
+        dest: "/var/lib/kubernetes/ca.pem"
+        owner: root
+        group: root
+        mode: "0600"
+
+
+    - name: "Copy worker node certs to workers"
       ansible.builtin.copy:
         src: "{{ SOURCE_PATH }}/{{ inventory_hostname }}.pem"
         dest: "/var/lib/kubelet/{{ inventory_hostname }}.pem"
@@ -233,7 +186,7 @@
         mode: "0600"
       loop: "{{ groups['workers'] }}"
 
-    - name: Copy worker keys
+    - name: "Copy worker keys to workers"
       ansible.builtin.copy:
         src: "{{ SOURCE_PATH }}/{{ inventory_hostname }}-key.pem"
         dest: "/var/lib/kubelet/{{ inventory_hostname }}-key.pem"
@@ -242,7 +195,7 @@
         mode: "0600"
       loop: "{{ groups['workers'] }}"
 
-    - name: Copy worker nodes kubeconfig
+    - name: "Copy worker nodes kubeconfig to workers"
       ansible.builtin.copy:
         src: "{{ SOURCE_PATH }}/{{ inventory_hostname }}.kubeconfig"
         dest: "/var/lib/kubelet/kubeconfig"
@@ -251,12 +204,12 @@
         mode: "0600"
       loop: "{{ groups['workers'] }}"
 
-    - name: Template kubelet-config file
+    - name: "Template kubelet-config file"
       ansible.builtin.template:
         src: "{{ TEMPLATES_PATH }}/kubelet-config.j2"
         dest: /var/lib/kubelet/kubelet-config.yaml
 
-    - name: Copy kubelet systemd unit file
+    - name: "Copy kubelet systemd unit file to workers"
       ansible.builtin.copy:
         src: "{{ FILES_PATH }}/kubelet.service"
         dest: "/etc/systemd/system/kubelet.service"
@@ -264,7 +217,7 @@
         group: root
         mode: "0600"
 
-    - name: Copy kube-proxy configuration file
+    - name: "Copy kube-proxy configuration file to workers"
       ansible.builtin.copy:
         src: "{{ SOURCE_PATH }}/kube-proxy.kubeconfig"
         dest: "/var/lib/kube-proxy/kubeconfig"
@@ -272,7 +225,7 @@
         group: root
         mode: "0600"
 
-    - name: Copy kube-proxy yaml configuration file
+    - name: "Copy kube-proxy yaml configuration file to workers"
       ansible.builtin.copy:
         src: "{{ FILES_PATH }}/kube-proxy-config.yaml"
         dest: "/var/lib/kube-proxy/kube-proxy-config.yaml"
@@ -280,7 +233,7 @@
         group: root
         mode: "0600"
 
-    - name: Copy Certificate authority private certificate to workers
+    - name: "Copy Certificate authority private certificate to workers"
       ansible.builtin.copy:
         src: "{{ FILES_PATH }}/kube-proxy.service"
         dest: "/etc/systemd/system/kube-proxy.service"
@@ -308,13 +261,3 @@
         enabled: true
         name: kube-proxy
       register: kube_proxy_status
-
-
-# ansible.builtin.blockinfile:
-# cat <<EOF | sudo tee /etc/cni/net.d/99-loopback.conf
-# {
-#     "cniVersion": "0.4.0",
-#     "name": "lo",
-#     "type": "loopback"
-# }
-# EOF
