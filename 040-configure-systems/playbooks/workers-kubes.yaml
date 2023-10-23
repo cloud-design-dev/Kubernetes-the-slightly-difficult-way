@@ -76,8 +76,7 @@
     - name: "Remount systemd for use with cgroups"
       ansible.builtin.shell:
         cmd: mount -t cgroup -o none,name=systemd cgroup /sys/fs/cgroup/systemd
-        warn: false
-
+        
     - name: "Download kube-proxy, kubelet, and kubectl binaries, add to path and mark as executable"
       ansible.builtin.get_url:
         url: https://storage.googleapis.com/kubernetes-release/release/{{ K8S_VERSION }}/bin/linux/amd64/{{ binary_file }}

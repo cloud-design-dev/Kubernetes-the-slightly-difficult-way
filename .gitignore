@@ -7,7 +7,7 @@
 **/*.kubeconfig
 **/encryption-config.yaml
 .vscode/
-
+040-configure-systems/playbooks/vars.yml
 # .tfstate files
 *.tfstate
 *.tfstate.*

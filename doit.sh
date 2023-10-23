@@ -15,6 +15,6 @@ fi
 
 if [[ "$1" == "clean" ]]; then
   (cd 030-certificate-authority && ./main.sh clean) || true
-  (cd 020-infrastructure && ./main.sh clean) || true
+  (cd 020-vpc-compute && ./main.sh clean) || true
   (cd 010-vpc-infrastructure && ./main.sh clean) || true
 fi

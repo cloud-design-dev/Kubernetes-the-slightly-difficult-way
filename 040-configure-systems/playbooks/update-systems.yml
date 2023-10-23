@@ -3,14 +3,14 @@
   hosts: all
   gather_facts: true
   tasks:
-    - name: "Update yum packages on RPM based systems" 
-      ansible.builtin.yum: 
-        name=* 
+    - name: "Update yum packages on RPM based systems"
+      ansible.builtin.yum:
+        name=*
         state=latest
-      when: ansible_facts['os_family'] == "RedHat"    
+      when: ansible_facts['os_family'] == "RedHat"
     - name: "Update apt packages on DEB based systems"
-      ansible.builtin.apt: 
-        upgrade=yes 
+      ansible.builtin.apt:
+        upgrade=yes
         update_cache=yes
       register: apt_status
       until: apt_status is success
@@ -29,4 +29,27 @@
           {{ hostvars[host].ansible_default_ipv4.address }} {{ hostvars[host].ansible_hostname }}
           {% endfor %}
 
-    
+# Add logging here, apt packages for workers and then reboot all systems
+    - name: Add logdna apt-key
+      ansible.builtin.apt_key:
+        url: https://assets.logdna.com/logdna.gpg
+        state: present
+    - name: Add logdna repo
+      ansible.builtin.apt_repository:
+        repo: deb https://assets.logdna.com stable main
+    - name: Install logdna-agent
+      ansible.builtin.apt:
+        name: logdna-agent
+        state: present
+        update_cache: yes
+
+    - name: copy logging config to hosts
+      ansible.builtin.copy:
+        src: ../files/logging.config
+        dest: /etc/logdna.env
+    - name: "Enable and start logging agent"
+      ansible.builtin.systemd:
+        state: started
+        enabled: true
+        name: logdna-agent
+      register: logdna_agent_status

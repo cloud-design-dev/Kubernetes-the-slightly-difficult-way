@@ -128,7 +128,7 @@
         mode: "0600"
 
     - name: "Create RBAC configuration"
-      ansible.builtin.command: "kubectl apply --kubeconfig /root/admin.kubeconfig -f /root/rbac-config.yaml"
+      ansible.builtin.command: "kubectl create --kubeconfig /root/admin.kubeconfig -f /root/rbac-config.yaml"
       register: rbac_status
       changed_when: rbac_status.rc != 0
       delegate_to: "{{ groups['controllers'][0] }}"
