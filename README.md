@@ -1,4 +1,4 @@
-# Kubernetes the slightly *less difficult way
+# Kubernetes the *slightly less difficult way
 
 Borrowing heavily from the original [Kubernetes the Hard Way][kubes-hard-way] guide by [Kelsey Hightower][kelsey-hightower], this tutorial will walk you through the steps of deploying a Kubernetes cluster in an [IBM Cloud VPC][ibm-cloud] using [Terraform][terraform], [Ansible][ansible] and some CLI magic.
 
@@ -77,6 +77,26 @@ vpc_id = "r038-3542898c-xxxxx"
 
 When prompted, enter `yes` to confirm the deployment. When the deployment completes you should see output similar to the following:
 
+### Step 3: Create our certificate authority and genererate keys and certs
+
+```shell
+(cd 030-certificate-authority && ./main.sh apply)
+```
+
+This terraform run does not contain any output, so once it completes you can move on to running the Ansible playbooks. 
+
+### Step 4: Run Ansible playbooks to prep worker and control plane nodes
+
+The `update-systems.yml` playbook does the following:
+
+ - Updates the `/etc/hosts` file on each instance with all the worker and control plane nodes
+ - Runs an `apt-get` update and upgrade of any existing packages.
+ - Installs `socat, conntrack, and ipset` on the worker nodes
+ - ....
+
+```shell
+ansible-playbook -i 040-configure-systems/inventory.ini 040-configure-systems/playbooks/update-systems.yml
+```
 
 
 [kelsey-hightower]: https://en.wikipedia.org/wiki/Kelsey_Hightower
