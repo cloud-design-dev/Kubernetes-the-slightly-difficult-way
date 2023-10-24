@@ -38,17 +38,6 @@
       loop_control:
         loop_var: etcd_file
 
-    # - name: "Create etcd directories"
-    #   ansible.builtin.file:
-    #     path: "{{ item }}"
-    #     state: directory
-    #     owner: root
-    #     group: root
-    #     mode: "0700"
-    #   loop:
-    #     - /etc/etcd
-    #     - /var/lib/etcd
-
     - name: Create etcd systemd unit file
       ansible.builtin.template:
         src: "{{ TEMPLATES_PATH }}/etcd.service.j2"
@@ -100,7 +89,7 @@
     - name: "Check etcd member status"
       ansible.builtin.command: "/usr/local/bin/etcdctl member list --endpoints=https://127.0.0.1:2379 --cacert=/etc/etcd/ca.pem --cert=/etc/etcd/kubernetes.pem --key=/etc/etcd/kubernetes-key.pem"
       register: etcd_members
-      when: "{{ groups['controllers'][0] }}"
+      # when: inventory_hostname in groups['controllers'][0]
 
     - name: "Verify etcd member status"
       ansible.builtin.assert:

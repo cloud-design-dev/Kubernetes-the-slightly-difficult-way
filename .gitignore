@@ -9,6 +9,9 @@
 .vscode/
 040-configure-systems/files/logging.config
 040-configure-systems/playbooks/vars.yml
+030-certificate-authority/worker-*-csr.json
+040-configure-systems/inventory.ini
+
 # .tfstate files
 *.tfstate
 *.tfstate.*

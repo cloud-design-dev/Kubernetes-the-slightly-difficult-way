@@ -126,30 +126,30 @@ resource "ibm_is_lb" "apiserver" {
   name           = "${var.basename}-apiserver-lb"
   subnets        = [data.terraform_remote_state.vpc.outputs.subnet_id]
   profile        = "network-fixed"
-  type           = "private"
+  type           = "public"
   resource_group = data.terraform_remote_state.vpc.outputs.resource_group_id
   tags           = concat(local.tags, ["zone:${local.vpc_zones[0].zone}"])
 }
 
 resource "ibm_is_lb_pool" "apiserver_pool" {
-  depends_on          = [ibm_is_lb.apiserver]
-  lb                  = ibm_is_lb.apiserver.id
-  name                = "${var.basename}-apiserver-pool"
-  protocol            = "tcp"
-  algorithm           = "round_robin"
-  health_delay        = "5"
-  health_retries      = "2"
-  health_timeout      = "2"
-  health_type         = "tcp"
+  depends_on         = [ibm_is_lb.apiserver]
+  lb                 = ibm_is_lb.apiserver.id
+  name               = "${var.basename}-apiserver-pool"
+  protocol           = "tcp"
+  algorithm          = "round_robin"
+  health_delay       = "5"
+  health_retries     = "2"
+  health_timeout     = "2"
+  health_type        = "tcp"
   health_monitor_port = "6443"
-  health_monitor_url  = "/healthz"
+  health_monitor_url = "/healthz"
 }
 
 resource "ibm_is_lb_listener" "apiserver_listener" {
-  depends_on   = [ibm_is_lb_pool.apiserver_pool]
-  lb           = ibm_is_lb.apiserver.id
-  port         = "6443"
-  protocol     = "tcp"
+  depends_on = [ibm_is_lb_pool.apiserver_pool]
+  lb         = ibm_is_lb.apiserver.id
+  port       = "6443"
+  protocol   = "tcp"
 }
 
 resource "ibm_is_lb_pool_member" "apiserver_pool_member" {
@@ -160,8 +160,6 @@ resource "ibm_is_lb_pool_member" "apiserver_pool_member" {
   target_id = ibm_is_instance.controllers[count.index].id
   weight    = 60
 }
-
-
 
 resource "local_file" "worker_csr" {
   count    = 3
@@ -191,7 +189,7 @@ module "ansible_inventory" {
   bastion_public_ip = ibm_is_floating_ip.bastion.address
   controllers       = ibm_is_instance.controllers.*
   workers           = ibm_is_instance.workers.*
-  load_balancer_ip  = ibm_is_lb.apiserver.private_ip[0].address
+  load_balancer_ip  = "api.cde.lab"
 }
 
 

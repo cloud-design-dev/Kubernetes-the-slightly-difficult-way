@@ -10,8 +10,12 @@ output "controller_name" {
   value = ibm_is_instance.controllers[*].name
 }
 
+#output "load_balancer_ip" {
+#  value = ibm_is_lb.apiserver.public_ips[0]
+#}
+
 output "load_balancer_ip" {
-  value = ibm_is_lb.apiserver.private_ip[0].address
+  value = "api.cde.lab"
 }
 
 output "worker_name" {
