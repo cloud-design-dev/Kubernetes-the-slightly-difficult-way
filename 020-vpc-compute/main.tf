@@ -103,8 +103,8 @@ resource "ibm_is_instance" "workers" {
   }
 
   user_data = templatefile("${path.module}/workers.tftpl", {
-  pod_cidr = "10.200.${count.index}.0/24"
-   })
+    pod_cidr = "10.200.${count.index}.0/24"
+  })
 
   zone = local.vpc_zones[0].zone
   keys = [data.ibm_is_ssh_key.sshkey.id]
@@ -126,8 +126,7 @@ resource "ibm_is_lb" "apiserver" {
   name           = "${var.basename}-apiserver-lb"
   subnets        = [data.terraform_remote_state.vpc.outputs.subnet_id]
   profile        = "network-fixed"
-  type           = "public"
-  # security_groups = [data.terraform_remote_state.vpc.outputs.cluster_security_group_id]
+  type           = "private"
   resource_group = data.terraform_remote_state.vpc.outputs.resource_group_id
   tags           = concat(local.tags, ["zone:${local.vpc_zones[0].zone}"])
 }
@@ -193,7 +192,7 @@ module "ansible_inventory" {
   bastion_public_ip = ibm_is_floating_ip.bastion.address
   controllers       = ibm_is_instance.controllers.*
   workers           = ibm_is_instance.workers.*
-  load_balancer_ip  = ibm_is_lb.apiserver.public_ips[0]
+  load_balancer_ip  = ibm_is_lb.apiserver.private_ip[0].address
 }
 
 

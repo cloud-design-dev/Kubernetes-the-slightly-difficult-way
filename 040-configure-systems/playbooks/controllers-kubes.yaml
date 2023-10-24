@@ -27,16 +27,16 @@
       loop_control:
         loop_var: binary_file
 
-    - name: "Create kubernetes directories"
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: directory
-        owner: root
-        group: root
-        mode: "0700"
-      loop:
-        - /var/lib/kubernetes/
-        - /etc/kubernetes/config
+    # - name: "Create kubernetes directories"
+    #   ansible.builtin.file:
+    #     path: "{{ item }}"
+    #     state: directory
+    #     owner: root
+    #     group: root
+    #     mode: "0700"
+    #   loop:
+    #     - /var/lib/kubernetes/
+    #     - /etc/kubernetes/config
 
     - name: "Copy CA, Kubernetes, and Service Account certificates and keys to /var/lib/kubernetes/"
       ansible.builtin.copy:
@@ -89,6 +89,28 @@
         group: root
         mode: "0644"
 
+    - name: "Copy RBAC configuration files"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/rbac-config.yaml"
+        dest: /root/rbac-config.yaml
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: "Copy Admin kubeconfig file"
+      ansible.builtin.copy:
+        src: "{{ SOURCE_PATH }}/admin.kubeconfig"
+        dest: /root/admin.kubeconfig
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: "Create RBAC configuration"
+      ansible.builtin.command: "kubectl create --kubeconfig /root/admin.kubeconfig -f /root/rbac-config.yaml"
+      register: rbac_status
+      changed_when: rbac_status.rc == 0
+      when: inventory_hostname in groups['controllers'][0]
+
     - name: "Reload systemd daemon and start kube-apiserver service"
       ansible.builtin.systemd:
         state: started
@@ -110,26 +132,3 @@
         enabled: true
         name: kube-controller-manager
       register: kube_controller_status
-
-    - name: "Copy RBAC configuration files"
-      ansible.builtin.copy:
-        src: "{{ FILES_PATH }}/rbac-config.yaml"
-        dest: /root/rbac-config.yaml
-        owner: root
-        group: root
-        mode: "0600"
-
-    - name: "Copy Admin kubeconfig file"
-      ansible.builtin.copy:
-        src: "{{ SOURCE_PATH }}/admin.kubeconfig"
-        dest: /root/admin.kubeconfig
-        owner: root
-        group: root
-        mode: "0600"
-
-    - name: "Create RBAC configuration"
-      ansible.builtin.command: "kubectl create --kubeconfig /root/admin.kubeconfig -f /root/rbac-config.yaml"
-      register: rbac_status
-      changed_when: rbac_status.rc != 0
-      delegate_to: "{{ groups['controllers'][0] }}"
-

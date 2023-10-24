@@ -11,30 +11,6 @@
     - FILES_PATH: "../files"
     - TEMPLATES_PATH: "../templates"
   tasks:
-    - name: Enumerate all control nodes within the hosts file
-      ansible.builtin.blockinfile:
-        dest: /etc/hosts
-        marker: "# {mark} ANSIBLE MANAGED: Kubernetes hosts"
-        content: |
-          {% for host in groups['controllers'] %}
-          {{ hostvars[inventory_hostname].ansible_default_ipv4.address }} {{ hostvars[inventory_hostname].ansible_hostname }}
-          {% endfor %}
-          {% for host in groups['workers'] %}
-          {{ hostvars[inventory_hostname].ansible_default_ipv4.address }} {{ hostvars[inventory_hostname].ansible_hostname }}
-          {% endfor %}
-      when:
-        - inventory_hostname in groups['controllers']
-
-    - name: "Update system packages on control nodes"
-      ansible.builtin.apt:
-        update_cache: true
-      register: apt_status
-      until: apt_status is success
-      delay: 30
-      retries: 10
-      when: ansible_facts['os_family'] == "Debian"
-
-## Etcd Tasks
     - name: "Download etcd binary"
       ansible.builtin.get_url:
         url: "{{ GITHUB_URL }}/{{ ETCD_VERSION }}/etcd-{{ ETCD_VERSION }}-linux-amd64.tar.gz"
@@ -62,16 +38,16 @@
       loop_control:
         loop_var: etcd_file
 
-    - name: "Create etcd directories"
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: directory
-        owner: root
-        group: root
-        mode: "0700"
-      loop:
-        - /etc/etcd
-        - /var/lib/etcd
+    # - name: "Create etcd directories"
+    #   ansible.builtin.file:
+    #     path: "{{ item }}"
+    #     state: directory
+    #     owner: root
+    #     group: root
+    #     mode: "0700"
+    #   loop:
+    #     - /etc/etcd
+    #     - /var/lib/etcd
 
     - name: Create etcd systemd unit file
       ansible.builtin.template:
@@ -110,18 +86,21 @@
         daemon_reload: true
         name: etcd
 
-    - name: "Get etcd service status" 
+    - name: "Get etcd service status"
       ansible.builtin.service:
         name: etcd
+        state: started
+        enabled: true
       register: etcd_status
       until: etcd_status is success
       delay: 10
       retries: 3
+      changed_when: etcd_status.status == 'started'
 
     - name: "Check etcd member status"
       ansible.builtin.command: "/usr/local/bin/etcdctl member list --endpoints=https://127.0.0.1:2379 --cacert=/etc/etcd/ca.pem --cert=/etc/etcd/kubernetes.pem --key=/etc/etcd/kubernetes-key.pem"
       register: etcd_members
-      delegate_to: "{{ groups['controllers'][0] }}"
+      when: "{{ groups['controllers'][0] }}"
 
     - name: "Verify etcd member status"
       ansible.builtin.assert:
