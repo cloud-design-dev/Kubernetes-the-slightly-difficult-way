@@ -1,13 +1,8 @@
 ---
-- name: 'Update all deployed systems'
+- name: 'Update all systems and prep for kubernetes'
   hosts: all
   gather_facts: true
   tasks:
-    - name: "Update yum packages on RPM based systems"
-      ansible.builtin.yum:
-        name=*
-        state=latest
-      when: ansible_facts['os_family'] == "RedHat"
     - name: "Update apt packages on DEB based systems"
       ansible.builtin.apt:
         upgrade=yes
@@ -17,6 +12,7 @@
       delay: 10
       retries: 10
       when: ansible_facts['os_family'] == "Debian"
+
     - name: "Enumerate all controllers and workers within the hosts file"
       ansible.builtin.blockinfile:
         dest: /etc/hosts
@@ -28,28 +24,111 @@
           {% for host in groups['controllers'] %}
           {{ hostvars[host].ansible_default_ipv4.address }} {{ hostvars[host].ansible_hostname }}
           {% endfor %}
+      register: hosts_file
+      changed_when: hosts_file.changed
 
-# Add logging here, apt packages for workers and then reboot all systems
-    - name: Add logdna apt-key
+    - name: "Add logdna v2 gpg key to apt keyring"
       ansible.builtin.apt_key:
         url: https://assets.logdna.com/logdna.gpg
         state: present
-    - name: Add logdna repo
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: "Add logdna v2 apt repository"
       ansible.builtin.apt_repository:
         repo: deb https://assets.logdna.com stable main
+      when: ansible_facts['os_family'] == "Debian"
+
     - name: Install logdna-agent
       ansible.builtin.apt:
         name: logdna-agent
         state: present
-        update_cache: yes
+        update_cache: true
+      when: ansible_facts['os_family'] == "Debian"
 
-    - name: copy logging config to hosts
+    - name: "Copy logdna agent config to hosts"
       ansible.builtin.copy:
         src: ../files/logging.config
         dest: /etc/logdna.env
-    - name: "Enable and start logging agent"
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: "Enable and start logging agent on all systems"
       ansible.builtin.systemd:
         state: started
         enabled: true
         name: logdna-agent
       register: logdna_agent_status
+      changed_when: logdna_agent_status.changed
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: "Install required apt packages for kubernetes worker nodes"
+      ansible.builtin.apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - socat
+        - conntrack
+        - ipset
+      register: pkgs_installed
+      changed_when: pkgs_installed.changed
+      when: inventory_hostname in groups['workers']
+
+    - name: "Create required kubernetes directories on worker nodes"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop:
+        - /etc/cni/net.d
+        - /opt/cni/bin
+        - /var/lib/kubelet
+        - /var/lib/kube-proxy
+        - /var/lib/kubernetes
+        - /var/run/kubernetes
+        - /root/containerd
+        - /etc/containerd
+        - /sys/fs/cgroup/systemd
+      register: worker_directories_created
+      changed_when: worker_directories_created.changed
+      when: inventory_hostname in groups['workers']
+
+    - name: "Create etcd and kubernetes directories on control plane nodes"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop:
+        - /etc/etcd
+        - /var/lib/etcd
+        - /var/lib/kubernetes/
+        - /etc/kubernetes/config
+
+      register: controller_directories_created
+      changed_when: controller_directories_created.changed
+      when: inventory_hostname in groups['controllers']
+
+
+    - name: "Disable SWAP since kubernetes can't work with swap enabled (1/2)"
+      ansible.builtin.shell: |
+        swapoff -a
+      register: swap_status
+      changed_when: swap_status.rc != 0
+      when: inventory_hostname in groups['workers']
+
+    - name: "Disable SWAP in fstab since kubernetes can't work with swap enabled (2/2)"
+      ansible.builtin.replace:
+        path: /etc/fstab
+        regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
+        replace: '# \1'
+      register: swap_fstab
+      changed_when: swap_fstab.rc != 0
+      when: inventory_hostname in groups['workers']
+
+    - name: "Reboot the all worker and control nodes after and updating and system prep"
+      ansible.builtin.reboot:
+        reboot_timeout: 120
+        msg: "Reboot initiated by Ansible for kubernetes prep"
+      when: inventory_hostname in groups['workers'] or inventory_hostname in groups['controllers']

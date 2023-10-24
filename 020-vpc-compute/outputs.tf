@@ -6,14 +6,14 @@ output "workers_private_ip" {
   value = ibm_is_instance.workers[*].primary_network_interface[0].primary_ipv4_address
 }
 
-output "controllers" {
-  value = ibm_is_instance.controllers[*]
+output "controller_name" {
+  value = ibm_is_instance.controllers[*].name
 }
 
-output "lb_public_ip" {
-  value = ibm_is_lb.apiserver.public_ips[0]
+output "load_balancer_ip" {
+  value = ibm_is_lb.apiserver.private_ip[0].address
 }
 
-output "workers" {
-  value = ibm_is_instance.workers[*]
+output "worker_name" {
+  value = ibm_is_instance.workers[*].name
 }

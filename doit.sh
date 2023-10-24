@@ -18,3 +18,9 @@ if [[ "$1" == "clean" ]]; then
   (cd 020-vpc-compute && ./main.sh clean) || true
   (cd 010-vpc-infrastructure && ./main.sh clean) || true
 fi
+
+if [[ "$1" == "auto-approve" ]]; then
+  (cd 010-vpc-infrastructure && ./main.sh auto-approve)
+  (cd 020-vpc-compute && ./main.sh auto-approve)
+  (cd 030-certificate-authority && ./main.sh auto-approve)
+fi

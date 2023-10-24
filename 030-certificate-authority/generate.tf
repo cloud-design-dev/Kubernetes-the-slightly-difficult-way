@@ -18,7 +18,7 @@ resource "null_resource" "kubelet_client" {
   depends_on = [null_resource.admin_client]
   count      = 3
   provisioner "local-exec" {
-    command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -hostname=${data.terraform_remote_state.compute.outputs.workers[count.index].name},${data.terraform_remote_state.compute.outputs.workers_private_ip[count.index]} -profile=kubernetes ${data.terraform_remote_state.compute.outputs.workers[count.index].name}-csr.json | cfssljson -bare ${data.terraform_remote_state.compute.outputs.workers[count.index].name}"
+    command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -hostname=${data.terraform_remote_state.compute.outputs.worker_name[count.index]},${data.terraform_remote_state.compute.outputs.workers_private_ip[count.index]} -profile=kubernetes ${data.terraform_remote_state.compute.outputs.worker_name[count.index]}-csr.json | cfssljson -bare ${data.terraform_remote_state.compute.outputs.worker_name[count.index]}"
   }
 }
 
@@ -58,7 +58,7 @@ resource "null_resource" "service_account" {
 resource "null_resource" "kube_apiserver" {
   depends_on = [null_resource.service_account]
   provisioner "local-exec" {
-    command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -hostname=10.32.0.1,${data.terraform_remote_state.compute.outputs.controller_private_ip[0]},${data.terraform_remote_state.compute.outputs.controller_private_ip[1]},${data.terraform_remote_state.compute.outputs.controller_private_ip[2]},${data.terraform_remote_state.compute.outputs.lb_public_ip},127.0.0.1,kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local -profile=kubernetes kubernetes-csr.json | cfssljson -bare kubernetes"
+    command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -hostname=10.32.0.1,${data.terraform_remote_state.compute.outputs.controller_private_ip[0]},${data.terraform_remote_state.compute.outputs.controller_private_ip[1]},${data.terraform_remote_state.compute.outputs.controller_private_ip[2]},${data.terraform_remote_state.compute.outputs.load_balancer_ip},127.0.0.1,kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local -profile=kubernetes kubernetes-csr.json | cfssljson -bare kubernetes"
 
   }
 }
@@ -68,7 +68,7 @@ resource "null_resource" "kube_config_cluster" {
   depends_on = [null_resource.kube_apiserver]
   count      = 3
   provisioner "local-exec" {
-    command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://${data.terraform_remote_state.compute.outputs.lb_public_ip}:6443 --kubeconfig=${data.terraform_remote_state.compute.outputs.workers[count.index].name}.kubeconfig"
+    command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://${data.terraform_remote_state.compute.outputs.load_balancer_ip}:6443 --kubeconfig=${data.terraform_remote_state.compute.outputs.worker_name[count.index]}.kubeconfig"
   }
 }
 
@@ -77,7 +77,7 @@ resource "null_resource" "kube_config_creds" {
   depends_on = [null_resource.kube_config_cluster]
   count      = 3
   provisioner "local-exec" {
-    command = "kubectl config set-credentials system:node:${data.terraform_remote_state.compute.outputs.workers[count.index].name} --client-certificate=${data.terraform_remote_state.compute.outputs.workers[count.index].name}.pem --client-key=${data.terraform_remote_state.compute.outputs.workers[count.index].name}-key.pem --embed-certs=true --kubeconfig=${data.terraform_remote_state.compute.outputs.workers[count.index].name}.kubeconfig"
+    command = "kubectl config set-credentials system:node:${data.terraform_remote_state.compute.outputs.worker_name[count.index]} --client-certificate=${data.terraform_remote_state.compute.outputs.worker_name[count.index]}.pem --client-key=${data.terraform_remote_state.compute.outputs.worker_name[count.index]}-key.pem --embed-certs=true --kubeconfig=${data.terraform_remote_state.compute.outputs.worker_name[count.index]}.kubeconfig"
   }
 }
 
@@ -86,7 +86,7 @@ resource "null_resource" "kube_config_context" {
   depends_on = [null_resource.kube_config_creds]
   count      = 3
   provisioner "local-exec" {
-    command = "kubectl config set-context default --cluster=kubernetes-the-hard-way --user=system:node:${data.terraform_remote_state.compute.outputs.workers[count.index].name} --kubeconfig=${data.terraform_remote_state.compute.outputs.workers[count.index].name}.kubeconfig"
+    command = "kubectl config set-context default --cluster=kubernetes-the-hard-way --user=system:node:${data.terraform_remote_state.compute.outputs.worker_name[count.index]} --kubeconfig=${data.terraform_remote_state.compute.outputs.worker_name[count.index]}.kubeconfig"
   }
 }
 
@@ -95,7 +95,7 @@ resource "null_resource" "kube_config_default" {
   depends_on = [null_resource.kube_config_context]
   count      = 3
   provisioner "local-exec" {
-    command = "kubectl config use-context default --cluster=kubernetes-the-hard-way --kubeconfig=${data.terraform_remote_state.compute.outputs.workers[count.index].name}.kubeconfig"
+    command = "kubectl config use-context default --cluster=kubernetes-the-hard-way --kubeconfig=${data.terraform_remote_state.compute.outputs.worker_name[count.index]}.kubeconfig"
   }
 }
 
@@ -104,7 +104,7 @@ resource "null_resource" "kube_config_default" {
 resource "null_resource" "kube_proxy_cluster" {
   depends_on = [null_resource.kube_config_default]
   provisioner "local-exec" {
-    command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://${data.terraform_remote_state.compute.outputs.lb_public_ip}:6443 --kubeconfig=kube-proxy.kubeconfig"
+    command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://${data.terraform_remote_state.compute.outputs.load_balancer_ip}:6443 --kubeconfig=kube-proxy.kubeconfig"
   }
 }
 
