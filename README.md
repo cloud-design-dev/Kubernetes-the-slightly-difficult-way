@@ -17,7 +17,6 @@ The guide is broken down into the following steps:
 ## Pre-requisites
 
 - [IBM Cloud API Key][ibm-cloud-api-key]
-- [IBM Cloud CLI][ibm-cloud-cli]
 - [Terraform][terraform]
 - [Ansible][ansible]
 - [cfssl](https://github.com/cloudflare/cfssl)
@@ -83,7 +82,6 @@ When prompted, enter `yes` to confirm the deployment. When the deployment comple
 [kelsey-hightower]: https://en.wikipedia.org/wiki/Kelsey_Hightower
 [ibm-cloud]: https://cloud.ibm.com/docs/vpc?topic=vpc-about-vpc
 [ibm-cloud-api-key]: https://cloud.ibm.com/docs/account?topic=account-userapikey#create_user_key
-[ibm-cloud-cli]: https://cloud.ibm.com/docs/cli?topic=cli-getting-started
 [terraform]: https://www.terraform.io/downloads.html
 [ansible]: https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html
 [kubes-hard-way]: https://github.com/kelseyhightower/kubernetes-the-hard-way
