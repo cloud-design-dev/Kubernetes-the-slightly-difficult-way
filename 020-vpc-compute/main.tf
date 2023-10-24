@@ -150,7 +150,6 @@ resource "ibm_is_lb_listener" "apiserver_listener" {
   lb           = ibm_is_lb.apiserver.id
   port         = "6443"
   protocol     = "tcp"
-  default_pool = element(split("/", ibm_is_lb_pool.apiserver_pool.id), 1)
 }
 
 resource "ibm_is_lb_pool_member" "apiserver_pool_member" {
