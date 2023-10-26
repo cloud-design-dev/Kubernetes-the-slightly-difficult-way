@@ -12,7 +12,7 @@ resource "local_file" "ansible-inventory" {
 resource "local_file" "ansible-vars" {
   content = templatefile("${path.module}/templates/vars.tmpl",
     {
-      load_balancer_ip = var.load_balancer_ip
+      loadbalancer_fqdn = var.loadbalancer_fqdn
     }
   )
   filename = "${path.module}/playbooks/vars.yml"
