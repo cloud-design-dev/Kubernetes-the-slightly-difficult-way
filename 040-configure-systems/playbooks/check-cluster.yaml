@@ -1,26 +1,24 @@
 ---
 - name: "Set kubectl config and test cluster connection"
   gather_facts: false
-  hosts: localhost
+  hosts: bastion
   vars_files:
     - vars.yml
-  vars:
-    - SOURCE_PATH: "../../030-certificate-authority"
   tasks:
     - name: "Set cluster in kubectl config"
       ansible.builtin.shell:
         cmd: |
           kubectl config set-cluster kubernetes-the-hard-way \
-            --certificate-authority={{ SOURCE_PATH }}/ca.pem \
+            --certificate-authority=/root/ca.pem \
             --embed-certs=true \
-            --server=https://{{ loadbalancer_public_ip }}:6443
+            --server=https://{{ loadbalancer_fqdn }}:6443
 
     - name: "Set admin credentials for kubectl"
       ansible.builtin.shell:
         cmd: |
           kubectl config set-credentials admin \
-            --client-certificate={{ SOURCE_PATH }}/admin.pem \
-            --client-key={{ SOURCE_PATH }}/admin-key.pem
+            --client-certificate=/root/admin.pem \
+            --client-key=/root/admin-key.pem
 
     - name: "Set kubectl context for cluster"
       ansible.builtin.shell:

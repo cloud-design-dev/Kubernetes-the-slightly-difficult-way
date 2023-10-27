@@ -2,6 +2,9 @@
 - name: 'Update all systems and prep for kubernetes'
   hosts: all
   gather_facts: true
+  vars:
+    - SOURCE_PATH: "../../030-certificate-authority"
+    - K8S_VERSION: "v1.27.6"
   tasks:
     - name: "Update apt packages on DEB based systems"
       ansible.builtin.apt:
@@ -72,6 +75,30 @@
       changed_when: pkgs_installed.changed
       when: inventory_hostname in groups['workers']
 
+    - name: "Copy files to bastion for kubectl cluster interaction"
+      ansible.builtin.copy:
+        src: "{{ SOURCE_PATH }}/{{ cert_file }}"
+        dest: /root/{{ cert_file }}
+        owner: root
+        group: root
+        mode: "0600"
+      loop:
+        - ca.pem
+        - admin.pem
+        - admin-key.pem
+      loop_control:
+        loop_var: cert_file
+      when: inventory_hostname in groups['bastion']
+
+    - name: "Download the kubectl binary, add to path and mark as executable on bastion"
+      ansible.builtin.get_url:
+        url: https://storage.googleapis.com/kubernetes-release/release/{{ K8S_VERSION }}/bin/linux/amd64/kubectl
+        dest: /usr/local/bin/kubectl
+        owner: root
+        group: root
+        mode: "0755"
+      when: inventory_hostname in groups['bastion']
+
     - name: "Create required kubernetes directories on worker nodes"
       ansible.builtin.file:
         path: "{{ item }}"
@@ -84,11 +111,11 @@
         - /opt/cni/bin
         - /var/lib/kubelet
         - /var/lib/kube-proxy
-        - /var/lib/kubernetes
+        - /var/lib/kubernetes/opt
         - /var/run/kubernetes
         - /root/containerd
         - /etc/containerd
-        - /sys/fs/cgroup/systemd
+
       register: worker_directories_created
       changed_when: worker_directories_created.changed
       when: inventory_hostname in groups['workers']

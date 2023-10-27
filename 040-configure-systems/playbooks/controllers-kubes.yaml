@@ -27,17 +27,6 @@
       loop_control:
         loop_var: binary_file
 
-    # - name: "Create kubernetes directories"
-    #   ansible.builtin.file:
-    #     path: "{{ item }}"
-    #     state: directory
-    #     owner: root
-    #     group: root
-    #     mode: "0700"
-    #   loop:
-    #     - /var/lib/kubernetes/
-    #     - /etc/kubernetes/config
-
     - name: "Copy CA, Kubernetes, and Service Account certificates and keys to /var/lib/kubernetes/"
       ansible.builtin.copy:
         src: "{{ SOURCE_PATH }}/{{ cert_file }}"
@@ -97,13 +86,19 @@
         group: root
         mode: "0600"
 
-    - name: "Copy Admin kubeconfig file"
+    - name: "Copy Admin kubeconfig files and keys"
       ansible.builtin.copy:
-        src: "{{ SOURCE_PATH }}/admin.kubeconfig"
-        dest: /root/admin.kubeconfig
+        src: "{{ SOURCE_PATH }}/{{ admin_file }}"
+        dest: /root/{{ admin_file }}
         owner: root
         group: root
         mode: "0600"
+      loop:
+        - admin.kubeconfig
+        - admin-key.pem
+        - admin.pem
+      loop_control:
+        loop_var: admin_file
 
     - name: "Reload systemd daemon and start kube-apiserver service"
       ansible.builtin.systemd:

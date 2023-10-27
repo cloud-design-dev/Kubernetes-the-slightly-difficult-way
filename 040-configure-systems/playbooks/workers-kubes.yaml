@@ -64,19 +64,7 @@
         group: root
         mode: "0755"
         remote_src: true
-
-    - name: "Create cgroup directory for containerd"
-      ansible.builtin.file:
-        path: "/sys/fs/cgroup/systemd"
-        state: directory
-        owner: root
-        group: root
-        mode: "0700"
-
-    - name: "Remount systemd for use with cgroups"
-      ansible.builtin.shell:
-        cmd: mount -t cgroup -o none,name=systemd cgroup /sys/fs/cgroup/systemd
-        
+   
     - name: "Download kube-proxy, kubelet, and kubectl binaries, add to path and mark as executable"
       ansible.builtin.get_url:
         url: https://storage.googleapis.com/kubernetes-release/release/{{ K8S_VERSION }}/bin/linux/amd64/{{ binary_file }}
@@ -143,7 +131,7 @@
         group: root
         mode: "0600"
 
-    - name: "Copy containerd configuration file to controllers"
+    - name: "Copy containerd configuration file to worker nodes"
       ansible.builtin.copy:
         src: "{{ FILES_PATH }}/config.toml"
         dest: /etc/containerd/config.toml
@@ -151,7 +139,7 @@
         group: root
         mode: "0600"
 
-    - name: "Copy containerd systemd unit file to controllers"
+    - name: "Copy containerd systemd unit file to worker nodes"
       ansible.builtin.copy:
         src: "{{ FILES_PATH }}/containerd.service"
         dest: /etc/systemd/system/containerd.service
@@ -185,7 +173,7 @@
         mode: "0600"
       loop: "{{ groups['workers'] }}"
 
-    - name: "Copy worker keys to workers"
+    - name: "Copy worker keys to worker nodes"
       ansible.builtin.copy:
         src: "{{ SOURCE_PATH }}/{{ inventory_hostname }}-key.pem"
         dest: "/var/lib/kubelet/{{ inventory_hostname }}-key.pem"
@@ -194,7 +182,7 @@
         mode: "0600"
       loop: "{{ groups['workers'] }}"
 
-    - name: "Copy worker nodes kubeconfig to workers"
+    - name: "Copy worker nodes kubeconfig to worker nodes"
       ansible.builtin.copy:
         src: "{{ SOURCE_PATH }}/{{ inventory_hostname }}.kubeconfig"
         dest: "/var/lib/kubelet/kubeconfig"
@@ -208,7 +196,7 @@
         src: "{{ TEMPLATES_PATH }}/kubelet-config.j2"
         dest: /var/lib/kubelet/kubelet-config.yaml
 
-    - name: "Copy kubelet systemd unit file to workers"
+    - name: "Copy kubelet systemd unit file to worker nodes"
       ansible.builtin.copy:
         src: "{{ FILES_PATH }}/kubelet.service"
         dest: "/etc/systemd/system/kubelet.service"
@@ -216,7 +204,7 @@
         group: root
         mode: "0600"
 
-    - name: "Copy kube-proxy configuration file to workers"
+    - name: "Copy kube-proxy configuration file to worker nodes"
       ansible.builtin.copy:
         src: "{{ SOURCE_PATH }}/kube-proxy.kubeconfig"
         dest: "/var/lib/kube-proxy/kubeconfig"
@@ -224,7 +212,7 @@
         group: root
         mode: "0600"
 
-    - name: "Copy kube-proxy yaml configuration file to workers"
+    - name: "Copy kube-proxy yaml configuration file to worker nodes"
       ansible.builtin.copy:
         src: "{{ FILES_PATH }}/kube-proxy-config.yaml"
         dest: "/var/lib/kube-proxy/kube-proxy-config.yaml"
@@ -232,7 +220,7 @@
         group: root
         mode: "0600"
 
-    - name: "Copy Certificate authority private certificate to workers"
+    - name: "Copy Certificate authority private certificate to worker nodes"
       ansible.builtin.copy:
         src: "{{ FILES_PATH }}/kube-proxy.service"
         dest: "/etc/systemd/system/kube-proxy.service"

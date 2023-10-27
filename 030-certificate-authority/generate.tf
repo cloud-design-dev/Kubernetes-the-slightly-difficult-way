@@ -1,5 +1,29 @@
+resource "local_file" "worker_csr" {
+  count    = 3
+  content  = <<EOF
+{
+  "CN": "system:node:worker-${count.index}",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Houston",
+      "O": "system:nodes",
+      "OU": "Kubernetes The Slightly Difficult Way",
+      "ST": "Texas"
+    }
+  ]
+}
+EOF
+  filename = "worker-${count.index}-csr.json"
+}
+
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md#certificate-authority
 resource "null_resource" "certificate_authority" {
+  depends_on = [ local_file.worker_csr ]
   provisioner "local-exec" {
     command = "cfssl gencert -initca ca-csr.json | cfssljson -bare ca"
   }
@@ -58,7 +82,7 @@ resource "null_resource" "service_account" {
 resource "null_resource" "kube_apiserver" {
   depends_on = [null_resource.service_account]
   provisioner "local-exec" {
-    command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -hostname=10.32.0.1,${data.terraform_remote_state.compute.outputs.controller_private_ip[0]},${data.terraform_remote_state.compute.outputs.controller_private_ip[1]},${data.terraform_remote_state.compute.outputs.controller_private_ip[2]},${data.terraform_remote_state.compute.outputs.load_balancer_ip},127.0.0.1,kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local -profile=kubernetes kubernetes-csr.json | cfssljson -bare kubernetes"
+    command = "cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -hostname=10.32.0.1,${data.terraform_remote_state.compute.outputs.controller_private_ip[0]},${data.terraform_remote_state.compute.outputs.controller_private_ip[1]},${data.terraform_remote_state.compute.outputs.controller_private_ip[2]},${data.terraform_remote_state.compute.outputs.loadbalancer_fqdn},127.0.0.1,kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local -profile=kubernetes kubernetes-csr.json | cfssljson -bare kubernetes"
 
   }
 }
@@ -68,7 +92,7 @@ resource "null_resource" "kube_config_cluster" {
   depends_on = [null_resource.kube_apiserver]
   count      = 3
   provisioner "local-exec" {
-    command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://${data.terraform_remote_state.compute.outputs.load_balancer_ip}:6443 --kubeconfig=${data.terraform_remote_state.compute.outputs.worker_name[count.index]}.kubeconfig"
+    command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://${data.terraform_remote_state.compute.outputs.loadbalancer_fqdn}:6443 --kubeconfig=${data.terraform_remote_state.compute.outputs.worker_name[count.index]}.kubeconfig"
   }
 }
 
@@ -104,7 +128,7 @@ resource "null_resource" "kube_config_default" {
 resource "null_resource" "kube_proxy_cluster" {
   depends_on = [null_resource.kube_config_default]
   provisioner "local-exec" {
-    command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://${data.terraform_remote_state.compute.outputs.load_balancer_ip}:6443 --kubeconfig=kube-proxy.kubeconfig"
+    command = "kubectl config set-cluster kubernetes-the-hard-way --certificate-authority=ca.pem --embed-certs=true --server=https://${data.terraform_remote_state.compute.outputs.loadbalancer_fqdn}:6443 --kubeconfig=kube-proxy.kubeconfig"
   }
 }
 
