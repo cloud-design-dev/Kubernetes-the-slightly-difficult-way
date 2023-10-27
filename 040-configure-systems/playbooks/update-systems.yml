@@ -30,39 +30,6 @@
       register: hosts_file
       changed_when: hosts_file.changed
 
-    - name: "Add logdna v2 gpg key to apt keyring"
-      ansible.builtin.apt_key:
-        url: https://assets.logdna.com/logdna.gpg
-        state: present
-      when: ansible_facts['os_family'] == "Debian"
-
-    - name: "Add logdna v2 apt repository"
-      ansible.builtin.apt_repository:
-        repo: deb https://assets.logdna.com stable main
-      when: ansible_facts['os_family'] == "Debian"
-
-    - name: Install logdna-agent
-      ansible.builtin.apt:
-        name: logdna-agent
-        state: present
-        update_cache: true
-      when: ansible_facts['os_family'] == "Debian"
-
-    - name: "Copy logdna agent config to hosts"
-      ansible.builtin.copy:
-        src: ../files/logging.config
-        dest: /etc/logdna.env
-      when: ansible_facts['os_family'] == "Debian"
-
-    - name: "Enable and start logging agent on all systems"
-      ansible.builtin.systemd:
-        state: started
-        enabled: true
-        name: logdna-agent
-      register: logdna_agent_status
-      changed_when: logdna_agent_status.changed
-      when: ansible_facts['os_family'] == "Debian"
-
     - name: "Install required apt packages for kubernetes worker nodes"
       ansible.builtin.apt:
         name: "{{ item }}"
