@@ -23,7 +23,7 @@ EOF
 
 # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md#certificate-authority
 resource "null_resource" "certificate_authority" {
-  depends_on = [ local_file.worker_csr ]
+  depends_on = [local_file.worker_csr]
   provisioner "local-exec" {
     command = "cfssl gencert -initca ca-csr.json | cfssljson -bare ca"
   }

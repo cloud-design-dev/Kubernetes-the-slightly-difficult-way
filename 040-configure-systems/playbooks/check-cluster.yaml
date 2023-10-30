@@ -1,46 +1,24 @@
 ---
-- name: "Set kubectl config and test cluster connection"
+- name: "Test cluster connection and install coredns"
   gather_facts: false
   hosts: bastion
-  vars_files:
-    - vars.yml
   tasks:
-    - name: "Set cluster in kubectl config"
-      ansible.builtin.shell:
-        cmd: |
-          kubectl config set-cluster kubernetes-the-hard-way \
-            --certificate-authority=/root/ca.pem \
-            --embed-certs=true \
-            --server=https://{{ loadbalancer_fqdn }}:6443
-
-    - name: "Set admin credentials for kubectl"
-      ansible.builtin.shell:
-        cmd: |
-          kubectl config set-credentials admin \
-            --client-certificate=/root/admin.pem \
-            --client-key=/root/admin-key.pem
-
-    - name: "Set kubectl context for cluster"
-      ansible.builtin.shell:
-        cmd: |
-          kubectl config set-context kubernetes-the-hard-way \
-            --cluster=kubernetes-the-hard-way \
-            --user=admin
-
-    - name: "Set kubectl context to default"
-      ansible.builtin.shell:
-        cmd: |
-          kubectl config use-context kubernetes-the-hard-way
-
     - name: "Test kubectl cluster connection"
       ansible.builtin.shell:
         cmd: |
           kubectl get nodes
       register: kubectl_status
-      # until: kubectl_status is success
-      # delay: 10
-      # retries: 10
-    
+      changed_when: false
+
     - name: "Print kubectl cluster connection status"
       ansible.builtin.debug:
         msg: "{{ kubectl_status.stdout_lines }}"
+
+    - name: "Install coredns helm"
+      ansible.builtin.shell:
+        cmd: |
+          helm repo add coredns https://coredns.github.io/helm
+          helm repo update
+          helm --namespace=kube-system install coredns coredns/coredns --set replicas=2
+      register: coredns_status
+      changed_when: false

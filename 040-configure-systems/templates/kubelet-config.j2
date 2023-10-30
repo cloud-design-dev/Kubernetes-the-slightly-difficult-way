@@ -10,6 +10,7 @@ authentication:
 authorization:
   mode: Webhook
 clusterDomain: "cluster.local"
+cgroupDriver: "systemd"
 clusterDNS:
   - "10.32.0.10"
 podCIDR: "{{ pod_cidr }}"

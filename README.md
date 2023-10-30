@@ -171,6 +171,23 @@ ansible-playbook -i 040-configure-systems/inventory.ini 040-configure-systems/pl
 ansible-playbook -i 040-configure-systems/inventory.ini 040-configure-systems/playbooks/check-cluster.yaml
 ```
 
+If all of the pieces lined up, you should see output similar to this:
+
+```shell
+ok: [bastion-host] => {
+    "msg": [
+        "NAME       STATUS   ROLES    AGE   VERSION",
+        "worker-0   Ready    <none>   23s   v1.27.6",
+        "worker-1   Ready    <none>   23s   v1.27.6",
+        "worker-2   Ready    <none>   23s   v1.27.6"
+    ]
+}
+```
+
+### Step 5: Install DNS Add-on and run some basic smoke tests
+
+> not yet implemented
+
 [kelsey-hightower]: https://en.wikipedia.org/wiki/Kelsey_Hightower
 [ibm-cloud]: https://cloud.ibm.com/docs/vpc?topic=vpc-about-vpc
 [ibm-cloud-api-key]: https://cloud.ibm.com/docs/account?topic=account-userapikey#create_user_key

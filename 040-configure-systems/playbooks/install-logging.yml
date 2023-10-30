@@ -1,13 +1,9 @@
 ---
-- name: 'Update all systems and prep for kubernetes'
+- name: 'Install logdna agent on all hosts'
   hosts: all
   gather_facts: true
   vars:
-    - SOURCE_PATH: "../../030-certificate-authority"
     - FILES_PATH: "../files"
-    - TEMPLATES_PATH: "../templates"
-  vars_files:
-    - vars.yml
   tasks:
     - name: "Add logdna v2 gpg key to apt keyring"
       ansible.builtin.apt_key:

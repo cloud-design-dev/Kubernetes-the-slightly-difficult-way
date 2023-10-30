@@ -126,5 +126,5 @@
     - name: "Create RBAC configuration"
       ansible.builtin.command: "kubectl create --kubeconfig /root/admin.kubeconfig -f /root/rbac-config.yaml"
       register: rbac_status
-      changed_when: rbac_status.changed
+      changed_when: rbac_status.rc == 0
       when: inventory_hostname in groups['controllers'][0]

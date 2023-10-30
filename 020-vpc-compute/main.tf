@@ -79,7 +79,7 @@ resource "ibm_is_instance" "controllers" {
 }
 
 resource "ibm_is_instance" "workers" {
-  depends_on = [ ibm_is_instance.controllers ]
+  depends_on     = [ibm_is_instance.controllers]
   count          = length(data.ibm_is_zones.regional.zones)
   name           = "worker-${count.index}"
   vpc            = data.terraform_remote_state.vpc.outputs.vpc_id
@@ -113,7 +113,7 @@ resource "ibm_is_instance" "workers" {
 }
 
 resource "ibm_is_vpc_routing_table_route" "woker_pod_cidr_route" {
-  depends_on = [ ibm_is_instance.workers ]
+  depends_on    = [ibm_is_instance.workers]
   count         = length(data.ibm_is_zones.regional.zones)
   vpc           = data.terraform_remote_state.vpc.outputs.vpc_id
   routing_table = data.terraform_remote_state.vpc.outputs.vpc_default_routing_table_id
@@ -224,5 +224,5 @@ module "ansible_inventory" {
   bastion_public_ip = ibm_is_floating_ip.bastion.address
   controllers       = ibm_is_instance.controllers.*
   workers           = ibm_is_instance.workers.*
-  loadbalancer_fqdn  = "api.${var.basename}.lab"
+  loadbalancer_fqdn = "api.${var.basename}.lab"
 }
