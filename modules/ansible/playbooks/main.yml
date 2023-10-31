@@ -1,0 +1,8 @@
+---
+  - import_playbook: ping-all.yml
+  - import_playbook: update-systems.yml
+  - import_playbook: install-logging.yml
+  - import_playbook: controllers-etcd.yaml
+  - import_playbook: controllers-kubes.yaml
+  - import_playbook: workers-kubes.yaml
+  - import_playbook: check-cluster.yaml

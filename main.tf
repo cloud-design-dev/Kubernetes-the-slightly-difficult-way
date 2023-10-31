@@ -1,24 +1,138 @@
-locals {
-  tags = [
-    "owner:${var.owner}",
-    "provider:ibm",
-    "region:${var.region}",
-    "deployment:${var.basename}"
-  ]
-  zones = length(data.ibm_is_zones.regional.zones)
-  vpc_zones = {
-    for zone in range(local.zones) : zone => {
-      zone = "${var.region}-${zone + 1}"
-    }
+module "resource_group" {
+  source                       = "git::https://github.com/terraform-ibm-modules/terraform-ibm-resource-group.git?ref=v1.0.5"
+  resource_group_name          = var.existing_resource_group == null ? "${var.basename}-resource-group" : null
+  existing_resource_group_name = var.existing_resource_group
+}
+
+resource "ibm_is_vpc" "vpc" {
+  name                        = "${var.basename}-vpc"
+  resource_group              = module.resource_group.resource_group_id
+  classic_access              = var.classic_access
+  address_prefix_management   = var.default_address_prefix
+  default_network_acl_name    = "${var.basename}-default-network-acl"
+  default_security_group_name = "${var.basename}-default-security-group"
+  default_routing_table_name  = "${var.basename}-default-routing-table"
+  tags                        = local.tags
+}
+
+resource "ibm_is_public_gateway" "dmz_pgw" {
+  name           = "${var.basename}-dmz-pgw"
+  resource_group = module.resource_group.resource_group_id
+  vpc            = ibm_is_vpc.vpc.id
+  zone           = local.vpc_zones[0].zone
+  tags           = concat(local.tags, ["zone:${local.vpc_zones[0].zone}"])
+}
+
+resource "ibm_is_subnet" "dmz_subnet" {
+  name                     = "${var.basename}-dmz-subnet"
+  resource_group           = module.resource_group.resource_group_id
+  vpc                      = ibm_is_vpc.vpc.id
+  zone                     = local.vpc_zones[0].zone
+  total_ipv4_address_count = "128"
+  public_gateway           = ibm_is_public_gateway.dmz_pgw.id
+  tags                     = concat(local.tags, ["zone:${local.vpc_zones[0].zone}"])
+}
+
+resource "ibm_is_public_gateway" "cluster_pgw" {
+  name           = "${var.basename}-cluster-pgw"
+  resource_group = module.resource_group.resource_group_id
+  vpc            = ibm_is_vpc.vpc.id
+  zone           = local.vpc_zones[1].zone
+  tags           = concat(local.tags, ["zone:${local.vpc_zones[1].zone}"])
+}
+
+resource "ibm_is_subnet" "controller_subnet" {
+  name                     = "${var.basename}-controller-subnet"
+  resource_group           = module.resource_group.resource_group_id
+  vpc                      = ibm_is_vpc.vpc.id
+  zone                     = local.vpc_zones[1].zone
+  total_ipv4_address_count = "128"
+  public_gateway           = ibm_is_public_gateway.cluster_pgw.id
+  tags                     = concat(local.tags, ["zone:${local.vpc_zones[1].zone}"])
+}
+
+resource "ibm_is_subnet" "worker_subnet" {
+  name                     = "${var.basename}-worker-subnet"
+  resource_group           = module.resource_group.resource_group_id
+  vpc                      = ibm_is_vpc.vpc.id
+  zone                     = local.vpc_zones[1].zone
+  total_ipv4_address_count = "128"
+  public_gateway           = ibm_is_public_gateway.cluster_pgw.id
+  tags                     = concat(local.tags, ["zone:${local.vpc_zones[1].zone}"])
+}
+
+module "dmz_security_group" {
+  source                = "terraform-ibm-modules/vpc/ibm//modules/security-group"
+  version               = "1.1.1"
+  create_security_group = true
+  name                  = "${var.basename}-dmz-sg"
+  vpc_id                = ibm_is_vpc.vpc.id
+  resource_group_id     = module.resource_group.resource_group_id
+  security_group_rules  = local.dmz_rules
+}
+
+module "controller_security_group" {
+  source                = "terraform-ibm-modules/vpc/ibm//modules/security-group"
+  version               = "1.1.1"
+  create_security_group = true
+  name                  = "${var.basename}-cluster-sg"
+  vpc_id                = ibm_is_vpc.vpc.id
+  resource_group_id     = module.resource_group.resource_group_id
+  security_group_rules  = local.controller_rules
+}
+
+module "worker_security_group" {
+  source                = "terraform-ibm-modules/vpc/ibm//modules/security-group"
+  version               = "1.1.1"
+  create_security_group = true
+  name                  = "${var.basename}-worker-sg"
+  vpc_id                = ibm_is_vpc.vpc.id
+  resource_group_id     = module.resource_group.resource_group_id
+  security_group_rules  = local.worker_rules
+}
+
+resource "ibm_is_security_group_rule" "bastion_to_controller_ssh" {
+  depends_on = [module.dmz_security_group]
+  group      = module.controller_security_group.security_group_id[0]
+  direction  = "inbound"
+  remote     = module.dmz_security_group.security_group_id[0]
+  tcp {
+    port_min = 22
+    port_max = 22
   }
+}
+
+resource "ibm_is_security_group_rule" "bastion_to_worker_ssh" {
+  depends_on = [module.dmz_security_group]
+  group      = module.worker_security_group.security_group_id[0]
+  direction  = "inbound"
+  remote     = module.dmz_security_group.security_group_id[0]
+  tcp {
+    port_min = 22
+    port_max = 22
+  }
+}
+
+resource "ibm_is_security_group_rule" "controllers_to_workers_inbound" {
+  depends_on = [module.worker_security_group]
+  group      = module.worker_security_group.security_group_id[0]
+  direction  = "inbound"
+  remote     = module.controller_security_group.security_group_id[0]
+}
+
+resource "ibm_is_security_group_rule" "controllers_to_workers_outbound" {
+  depends_on = [module.worker_security_group]
+  group      = module.worker_security_group.security_group_id[0]
+  direction  = "outbound"
+  remote     = module.controller_security_group.security_group_id[0]
 }
 
 resource "ibm_is_instance" "bastion" {
   name           = "${var.basename}-bastion"
-  vpc            = data.terraform_remote_state.vpc.outputs.vpc_id
+  vpc            = ibm_is_vpc.vpc.id
   image          = data.ibm_is_image.base.id
   profile        = var.instance_profile
-  resource_group = data.terraform_remote_state.vpc.outputs.resource_group_id
+  resource_group = module.resource_group.resource_group_id
 
   metadata_service {
     enabled            = true
@@ -51,10 +165,10 @@ resource "ibm_is_floating_ip" "bastion" {
 resource "ibm_is_instance" "controllers" {
   count          = 1
   name           = "controller-${count.index}"
-  vpc            = data.terraform_remote_state.vpc.outputs.vpc_id
+  vpc            = ibm_is_vpc.vpc.id
   image          = data.ibm_is_image.base.id
   profile        = var.instance_profile
-  resource_group = data.terraform_remote_state.vpc.outputs.resource_group_id
+  resource_group = module.resource_group.resource_group_id
 
   metadata_service {
     enabled            = true
@@ -82,10 +196,10 @@ resource "ibm_is_instance" "workers" {
   depends_on     = [ibm_is_instance.controllers]
   count          = 1
   name           = "worker-${count.index}"
-  vpc            = data.terraform_remote_state.vpc.outputs.vpc_id
+  vpc            = ibm_is_vpc.vpc.id
   image          = data.ibm_is_image.base.id
   profile        = var.instance_profile
-  resource_group = data.terraform_remote_state.vpc.outputs.resource_group_id
+  resource_group = module.resource_group.resource_group_id
 
   metadata_service {
     enabled            = true
@@ -186,21 +300,13 @@ resource "ibm_dns_glb_pool" "k8s_pdns_glb_pool" {
   instance_id               = ibm_resource_instance.project_instance.guid
   enabled                   = true
   healthy_origins_threshold = 1
+
+  # look up how to do dynamic based on number of controllers
   origins {
     name    = "controller-0"
     address = ibm_is_instance.controllers[0].primary_network_interface[0].primary_ip[0].address
     enabled = true
   }
-  # origins {
-  #   name    = "controller-1"
-  #   address = ibm_is_instance.controllers[1].primary_network_interface[0].primary_ip[0].address
-  #   enabled = true
-  # }
-  # origins {
-  #   name    = "controller-2"
-  #   address = ibm_is_instance.controllers[2].primary_network_interface[0].primary_ip[0].address
-  #   enabled = true
-  # }
 
   monitor             = ibm_dns_glb_monitor.gslb_healthcheck.monitor_id
   healthcheck_region  = var.region
@@ -219,10 +325,18 @@ resource "ibm_dns_glb" "k8s_pdns_glb" {
   default_pools = [ibm_dns_glb_pool.k8s_pdns_glb_pool.pool_id]
 }
 
+module "certificate_authority" {
+  source            = "./modules/certificate-authority"
+  controllers       = ibm_is_instance.controllers.*
+  workers           = ibm_is_instance.workers.*
+  loadbalancer_fqdn = "api.${var.basename}.lab"
+}
+
 module "ansible_inventory" {
-  source            = "../040-configure-systems"
+  source            = "./modules/ansible"
   bastion_public_ip = ibm_is_floating_ip.bastion.address
   controllers       = ibm_is_instance.controllers.*
   workers           = ibm_is_instance.workers.*
   loadbalancer_fqdn = "api.${var.basename}.lab"
 }
+

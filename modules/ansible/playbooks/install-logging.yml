@@ -1,0 +1,45 @@
+---
+- name: 'Install logdna agent on all hosts'
+  hosts: all
+  gather_facts: true
+  vars:
+    - FILES_PATH: "../files"
+  tasks:
+    - name: "Add logdna v2 gpg key to apt keyring"
+      ansible.builtin.apt_key:
+        url: https://assets.logdna.com/logdna.gpg
+        state: present
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: "Add logdna v2 apt repository"
+      ansible.builtin.apt_repository:
+        repo: deb https://assets.logdna.com stable main
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Install logdna-agent
+      ansible.builtin.apt:
+        name: logdna-agent
+        state: present
+        update_cache: true
+      when: ansible_facts['os_family'] == "Debian"
+
+## Change to template the file using jinja2
+## Add per host tag with the hostname
+
+    - name: "Copy logdna agent config to hosts"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/logging.config"
+        dest: /etc/logdna.env
+        owner: root
+        group: root
+        mode: "0644"
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: "Enable and start logging agent on all systems"
+      ansible.builtin.systemd:
+        state: started
+        enabled: true
+        name: logdna-agent
+      register: logdna_agent_status
+      changed_when: logdna_agent_status.changed
+      when: ansible_facts['os_family'] == "Debian"

@@ -1,0 +1,250 @@
+---
+- name: 'Install container runtime and kubernetes binaries on worker nodes'
+  gather_facts: true
+  hosts: workers
+  vars:
+    - CRI_VERSION: "v1.28.0"
+    - RUNC_VERSION: "v1.1.9"
+    - CNI_VERSION: "v1.3.0"
+    - CNRD_VERSION: "1.7.7"
+    - K8S_VERSION: "v1.27.6"
+    - SOURCE_PATH: "../../030-certificate-authority"
+    - FILES_PATH: "../files"
+    - TEMPLATES_PATH: "../templates"
+  tasks:
+    - name: "Download CRI tarball"
+      ansible.builtin.get_url:
+        url: "https://github.com/kubernetes-sigs/cri-tools/releases/download/{{ CRI_VERSION }}/crictl-{{ CRI_VERSION }}-linux-amd64.tar.gz"
+        dest: "/tmp/crictl-{{ CRI_VERSION }}-linux-amd64.tar.gz"
+        mode: "0644"
+
+    - name: "Unarchive CRI in to /usr/local/bin"
+      ansible.builtin.unarchive:
+        src: "/tmp/crictl-{{ CRI_VERSION }}-linux-amd64.tar.gz"
+        dest: "/usr/local/bin/"
+        remote_src: true
+
+    - name: "Download runc binary, add to path, and mark as executable"
+      ansible.builtin.get_url:
+        url: "https://github.com/opencontainers/runc/releases/download/{{ RUNC_VERSION }}/runc.amd64 "
+        dest: "/usr/local/bin/runc"
+        mode: "0755"
+
+    - name: "Download CNI plugin binaries"
+      ansible.builtin.get_url:
+        url: https://github.com/containernetworking/plugins/releases/download/{{ CNI_VERSION }}/cni-plugins-linux-amd64-{{ CNI_VERSION }}.tgz
+        dest: /tmp/cni-plugins-linux-amd64-{{ CNI_VERSION }}.tgz
+        owner: root
+        group: root
+
+    - name: "Unarchive CNI plugins in to /opt/cni/bin/"
+      ansible.builtin.unarchive:
+        src: "/tmp/cni-plugins-linux-amd64-{{ CNI_VERSION }}.tgz"
+        dest: "/opt/cni/bin/"
+        remote_src: true
+
+    - name: "Download containerd binaries"
+      ansible.builtin.get_url:
+        url: https://github.com/containerd/containerd/releases/download/v{{ CNRD_VERSION }}/containerd-{{ CNRD_VERSION }}-linux-amd64.tar.gz
+        dest: /tmp/containerd-{{ CNRD_VERSION }}-linux-amd64.tar.gz
+        owner: root
+        group: root
+
+    - name: "Unarchive containerd binaries in to /bin"
+      ansible.builtin.unarchive:
+        src: /tmp/containerd-{{ CNRD_VERSION }}-linux-amd64.tar.gz
+        dest: "/tmp"
+        remote_src: true
+
+    - name: "Copy containerd binaries to /bin"
+      ansible.builtin.copy:
+        src: "/tmp/bin/"
+        dest: /bin/
+        owner: root
+        group: root
+        mode: "0755"
+        remote_src: true
+   
+    - name: "Download kube-proxy, kubelet, and kubectl binaries, add to path and mark as executable"
+      ansible.builtin.get_url:
+        url: https://storage.googleapis.com/kubernetes-release/release/{{ K8S_VERSION }}/bin/linux/amd64/{{ binary_file }}
+        dest: /usr/local/bin/{{ binary_file }}
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - kube-proxy
+        - kubelet
+        - kubectl
+      loop_control:
+        loop_var: binary_file
+
+    - name: "Get timestamp from the system"
+      ansible.builtin.shell: "date +%Y-%m-%d"
+      register: tstamp
+
+    - name: "Set variable with current date"
+      set_fact:
+        curent_date: "{{ tstamp.stdout[0:10]}}"
+
+    - name: "Get token from IBM Cloud metadata service" 
+      ansible.builtin.uri:
+        url: "https://api.metadata.cloud.ibm.com/instance_identity/v1/token?version={{ curent_date }}"
+        user: ""
+        password: ""
+        method: PUT
+        body_format: json
+        headers:
+          Content-Type: application/json
+          Metadata-Flavor: "ibm"
+        validate_certs: false
+      register: metadata_token
+
+    - name: "Retrieve POD CIDR from IBM Cloud metadata service"
+      ansible.builtin.uri:
+        url: "https://169.254.169.254/metadata/v1/instance/initialization?version={{ curent_date }}"
+        method: GET
+        headers:
+          Accept: application/json
+          Authorization: "Bearer {{ metadata_token.json.access_token }}"
+        validate_certs: false
+      register: metadata
+
+    - name: "Extract user_data from metadata"
+      ansible.builtin.set_fact:
+        user_data: "{{ metadata.json | json_query('user_data') }}"
+
+    - name: "Extract POD_CIDR from user_data" 
+      ansible.builtin.set_fact:
+        pod_cidr: "{{ user_data | regex_replace('POD_CIDR=(.*)', '\\1') }}"
+
+    - name: "Template container network interface config file"
+      ansible.builtin.template:
+        src: "{{ TEMPLATES_PATH }}/cni-conf.j2"
+        dest: /etc/cni/net.d/10-mybridge.conf
+
+    - name: "Copy loopback.conf for container network interface"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/99-loopback.conf"
+        dest: /etc/cni/net.d/99-loopback.conf
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: "Copy containerd configuration file to worker nodes"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/config.toml"
+        dest: /etc/containerd/config.toml
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: "Copy containerd systemd unit file to worker nodes"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/containerd.service"
+        dest: /etc/systemd/system/containerd.service
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: "Copy Certificate authority private certificate for kubelet"
+      ansible.builtin.copy:
+        src: "{{ SOURCE_PATH }}/ca.pem"
+        dest: "/var/lib/kubelet/ca.pem"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: "Copy Certificate authority private certificate to kubernetes directory"
+      ansible.builtin.copy:
+        src: "{{ SOURCE_PATH }}/ca.pem"
+        dest: "/var/lib/kubernetes/ca.pem"
+        owner: root
+        group: root
+        mode: "0600"
+
+
+    - name: "Copy worker node certs to workers"
+      ansible.builtin.copy:
+        src: "{{ SOURCE_PATH }}/{{ inventory_hostname }}.pem"
+        dest: "/var/lib/kubelet/{{ inventory_hostname }}.pem"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ groups['workers'] }}"
+
+    - name: "Copy worker keys to worker nodes"
+      ansible.builtin.copy:
+        src: "{{ SOURCE_PATH }}/{{ inventory_hostname }}-key.pem"
+        dest: "/var/lib/kubelet/{{ inventory_hostname }}-key.pem"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ groups['workers'] }}"
+
+    - name: "Copy worker nodes kubeconfig to worker nodes"
+      ansible.builtin.copy:
+        src: "{{ SOURCE_PATH }}/{{ inventory_hostname }}.kubeconfig"
+        dest: "/var/lib/kubelet/kubeconfig"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ groups['workers'] }}"
+
+    - name: "Template kubelet-config file"
+      ansible.builtin.template:
+        src: "{{ TEMPLATES_PATH }}/kubelet-config.j2"
+        dest: /var/lib/kubelet/kubelet-config.yaml
+
+    - name: "Copy kubelet systemd unit file to worker nodes"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/kubelet.service"
+        dest: "/etc/systemd/system/kubelet.service"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: "Copy kube-proxy configuration file to worker nodes"
+      ansible.builtin.copy:
+        src: "{{ SOURCE_PATH }}/kube-proxy.kubeconfig"
+        dest: "/var/lib/kube-proxy/kubeconfig"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: "Copy kube-proxy yaml configuration file to worker nodes"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/kube-proxy-config.yaml"
+        dest: "/var/lib/kube-proxy/kube-proxy-config.yaml"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: "Copy Certificate authority private certificate to worker nodes"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/kube-proxy.service"
+        dest: "/etc/systemd/system/kube-proxy.service"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: "Enable and start containerd service"
+      ansible.builtin.systemd:
+        state: started
+        enabled: true
+        name: containerd
+      register: containerd_status
+
+    - name: "Enable and start kubelet service"
+      ansible.builtin.systemd:
+        state: started
+        enabled: true
+        name: kubelet
+      register: kubelet_status
+
+    - name: "Enable and start kube-proxy service"
+      ansible.builtin.systemd:
+        state: started
+        enabled: true
+        name: kube-proxy
+      register: kube_proxy_status

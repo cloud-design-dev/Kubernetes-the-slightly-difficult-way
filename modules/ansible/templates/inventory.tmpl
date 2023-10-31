@@ -1,0 +1,18 @@
+[bastion]
+bastion-host ansible_host=${bastion_ip} ansible_user=root
+
+[controllers]
+%{ for instanceIndex, cp_instance in controllers ~}
+${cp_instance.name} ansible_host=${cp_instance.primary_network_interface.0.primary_ipv4_address} ansible_user=root
+%{ endfor ~}
+
+[controllers:vars]
+ansible_ssh_extra_args='-o "StrictHostKeyChecking=no" -o ProxyCommand="ssh -o StrictHostKeyChecking=no -W %h:%p root@${bastion_ip}"'
+
+[workers]
+%{ for instanceIndex, worker_instance in workers ~}
+${worker_instance.name} ansible_host=${worker_instance.primary_network_interface.0.primary_ipv4_address} ansible_user=root
+%{ endfor ~}
+
+[workers:vars]
+ansible_ssh_extra_args='-o "StrictHostKeyChecking=no" -o ProxyCommand="ssh -o StrictHostKeyChecking=no -W %h:%p root@${bastion_ip}"'

@@ -1,0 +1,24 @@
+---
+- name: "Test cluster connection and install coredns"
+  gather_facts: false
+  hosts: bastion
+  tasks:
+    - name: "Test kubectl cluster connection"
+      ansible.builtin.shell:
+        cmd: |
+          kubectl get nodes
+      register: kubectl_status
+      changed_when: false
+
+    - name: "Print kubectl cluster connection status"
+      ansible.builtin.debug:
+        msg: "{{ kubectl_status.stdout_lines }}"
+
+    - name: "Install coredns helm"
+      ansible.builtin.shell:
+        cmd: |
+          helm repo add coredns https://coredns.github.io/helm
+          helm repo update
+          helm --namespace=kube-system install coredns coredns/coredns --set replicas=2
+      register: coredns_status
+      changed_when: false

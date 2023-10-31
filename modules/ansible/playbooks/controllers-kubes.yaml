@@ -1,0 +1,130 @@
+---
+- name: Configure control plane nodes
+  gather_facts: true
+  hosts: controllers
+  vars_files:
+    - vars.yml
+  vars:
+    - K8S_VERSION: "v1.27.6"
+    - SOURCE_PATH: "../../030-certificate-authority"
+    - FILES_PATH: "../files"
+    - TEMPLATES_PATH: "../templates"
+  tasks:
+
+## Kubernetes Tasks
+    - name: "Download kubernetes binaries"
+      ansible.builtin.get_url:
+        url: https://storage.googleapis.com/kubernetes-release/release/{{ K8S_VERSION }}/bin/linux/amd64/{{ binary_file }}
+        dest: /usr/local/bin/{{ binary_file }}
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - kube-apiserver
+        - kube-controller-manager
+        - kube-scheduler
+        - kubectl
+      loop_control:
+        loop_var: binary_file
+
+    - name: "Copy CA, Kubernetes, and Service Account certificates and keys to /var/lib/kubernetes/"
+      ansible.builtin.copy:
+        src: "{{ SOURCE_PATH }}/{{ cert_file }}"
+        dest: /var/lib/kubernetes/{{ cert_file }}
+        owner: root
+        group: root
+        mode: "0600"
+      loop:
+        - ca.pem
+        - ca-key.pem
+        - kubernetes-key.pem
+        - kubernetes.pem
+        - service-account-key.pem
+        - service-account.pem
+        - encryption-config.yaml
+        - kube-controller-manager.kubeconfig
+        - kube-scheduler.kubeconfig
+      loop_control:
+        loop_var: cert_file
+
+    - name: Template kube-apiserver systemd unit file
+      ansible.builtin.template:
+        src: "{{ TEMPLATES_PATH }}/kube-apiserver.service.j2"
+        dest: /etc/systemd/system/kube-apiserver.service
+        trim_blocks: true
+        mode: "0644"
+
+    - name: "Copy kube-controller-manager service file"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/kube-controller-manager.service"
+        dest: /etc/systemd/system/kube-controller-manager.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: "Copy kube-scheduler configuration file"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/kube-scheduler.yaml"
+        dest: /etc/kubernetes/config/kube-scheduler.yaml
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: "Copy kube-scheduler systemd unit file"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/kube-scheduler.service"
+        dest: /etc/systemd/system/kube-scheduler.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: "Copy RBAC configuration files"
+      ansible.builtin.copy:
+        src: "{{ FILES_PATH }}/rbac-config.yaml"
+        dest: /root/rbac-config.yaml
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: "Copy Admin kubeconfig files and keys"
+      ansible.builtin.copy:
+        src: "{{ SOURCE_PATH }}/{{ admin_file }}"
+        dest: /root/{{ admin_file }}
+        owner: root
+        group: root
+        mode: "0600"
+      loop:
+        - admin.kubeconfig
+        - admin-key.pem
+        - admin.pem
+      loop_control:
+        loop_var: admin_file
+
+    - name: "Reload systemd daemon and start kube-apiserver service"
+      ansible.builtin.systemd:
+        state: started
+        enabled: true
+        daemon_reload: true
+        name: kube-apiserver
+      register: kube_apiserver_status
+
+    - name: "Enable and start kube-scheduler service"
+      ansible.builtin.systemd:
+        state: started
+        enabled: true
+        name: kube-scheduler
+      register: kube_scheduler_status
+
+    - name: "Enable and start kube-controller-manager service"
+      ansible.builtin.systemd:
+        state: started
+        enabled: true
+        name: kube-controller-manager
+      register: kube_controller_status
+
+
+    - name: "Create RBAC configuration"
+      ansible.builtin.command: "kubectl create --kubeconfig /root/admin.kubeconfig -f /root/rbac-config.yaml"
+      register: rbac_status
+      changed_when: rbac_status.rc == 0
+      when: inventory_hostname in groups['controllers'][0]
