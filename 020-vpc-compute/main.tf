@@ -104,7 +104,7 @@ resource "ibm_is_instance" "workers" {
   }
 
   user_data = templatefile("${path.module}/workers.tftpl", {
-    pod_cidr = "10.200.${count.index}.0/24"
+    pod_cidr = "172.18.${count.index}.0/16"
   })
 
   zone = local.vpc_zones[0].zone
