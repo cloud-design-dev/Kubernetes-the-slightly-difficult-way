@@ -93,4 +93,13 @@ resource "ibm_is_security_group_rule" "cluster_to_cluster" {
   remote     = module.cluster_security_group.security_group_id[0]
 }
 
-
+resource "ibm_is_security_group_rule" "cluster_nodeport_to_cluster_tcp" {
+  depends_on = [module.bastion_security_group]
+  group      = module.cluster_security_group.security_group_id[0]
+  direction  = "inbound"
+  remote     = module.bastion_security_group.security_group_id[0]
+  tcp {
+    port_min = 30000
+    port_max = 32767
+  }
+}

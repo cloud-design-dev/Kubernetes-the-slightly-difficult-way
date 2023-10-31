@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: privpod
+spec:
+  selector:
+    matchLabels:
+      mydaemon: privpod
+  template:
+    metadata:
+      labels:
+        mydaemon: privpod
+    spec:
+      hostNetwork: true
+      hostPID: true
+      hostIPC: true
+      containers:
+        - name: privcontainer
+          image: johnnyb61820/network-toolkit
+          securityContext:
+            privileged: true
+          command:
+            - tail
+            - "-f"
+            - /dev/null
+          volumeMounts:
+            - name: nodefs
+              mountPath: /node-fs
+            - name: devfs
+              mountPath: /dev
+      volumes:
+        - name: nodefs
+          hostPath:
+            path: / 
+        - name: devfs
+          hostPath:
+            path: /dev

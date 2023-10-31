@@ -79,7 +79,7 @@ version = 2
           runtime_root = ""
           runtime_type = "io.containerd.runc.v2"
           sandbox_mode = "podsandbox"
-          snapshotter = ""
+          snapshotter = "overlayfs"
             
           [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
             BinaryName = ""

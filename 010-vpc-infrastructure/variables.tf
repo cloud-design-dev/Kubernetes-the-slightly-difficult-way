@@ -182,8 +182,8 @@ variable "cluster_rules" {
       }
     },
     {
-      name       = "nodeport-outbound"
-      direction  = "outbound"
+      name       = "nodeport-inbound"
+      direction  = "inbound"
       remote     = "0.0.0.0/0"
       ip_version = "ipv4"
       tcp = {
